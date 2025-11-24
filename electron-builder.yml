@@ -19,6 +19,19 @@ files:
   - '!BUILD_GUIDE.md'
   - '!PRD.md'
   - '!CLAUDE.md'
+  - '!generate-icon.py'
+  - '!build/icons/*'
+  - '!build/icon-source.png'
+  # Exclude unnecessary node_modules files
+  - '!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!node_modules/**/{test,__tests__,tests,powered-test,example,examples}'
+  - '!node_modules/**/*.d.ts'
+  - '!node_modules/**/*.md'
+  - '!node_modules/.bin'
+  - '!node_modules/.cache'
+  # Exclude all locales except English
+  - '!**/node_modules/**/locales/**'
+  - '**/node_modules/**/locales/en*.pak'
   - out/**/*
   - assets/**
   - package.json
@@ -26,6 +39,11 @@ files:
 asarUnpack:
   - resources/**
   - assets/**
+
+# Only include English locale for Electron
+electronLanguages:
+  - en
+  - en-US
 
 # ===== macOS Configuration =====
 mac:
