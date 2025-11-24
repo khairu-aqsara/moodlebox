@@ -10,21 +10,24 @@ const projectService = new ProjectService()
 const settingsService = new SettingsService()
 
 function createWindow(): void {
+  console.log('[Main] Creating window...')
   const mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
-    show: false,
+    show: true,  // Force show immediately for debugging
     resizable: false,
     title: 'MoodleBox',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      devTools: true  // Enable dev tools in production
     }
   })
 
   mainWindow.on('ready-to-show', () => {
+    console.log('[Main] Window ready-to-show event fired')
     mainWindow.show()
   })
 
@@ -33,11 +36,32 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  console.log('[Main] Loading renderer...')
+  console.log('[Main] isPackaged:', app.isPackaged)
+  console.log('[Main] __dirname:', __dirname)
+  
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    console.log('[Main] Loading from dev server:', process.env['ELECTRON_RENDERER_URL'])
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    const rendererPath = join(__dirname, '../renderer/index.html')
+    console.log('[Main] Loading from file:', rendererPath)
+    mainWindow.loadFile(rendererPath)
   }
+  
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('[Main] Failed to load:', errorCode, errorDescription)
+  })
+  
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Renderer loaded successfully')
+    // Open dev tools to see any renderer errors
+    mainWindow.webContents.openDevTools()
+  })
+  
+  mainWindow.webContents.on('console-message', (_event, _level, message) => {
+    console.log('[Renderer]', message)
+  })
 }
 
 // IPC Handlers
