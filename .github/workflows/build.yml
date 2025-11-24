@@ -35,68 +35,71 @@ jobs:
           name: macos-builds
           path: out/*.dmg
 
-  build-windows:
-    name: Build Windows (x64 + ARM64)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Build application
-        run: npx electron-vite build
-      
-      - name: Package for Windows
-        run: npx electron-builder --win --x64 --arm64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-builds
-          path: out/*-setup.exe
+  # Windows and Linux builds disabled for now
+  # Uncomment when ready to build for all platforms
+  
+  # build-windows:
+  #   name: Build Windows (x64 + ARM64)
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #     
+  #     - name: Install dependencies
+  #       run: npm ci
+  #     
+  #     - name: Build application
+  #       run: npx electron-vite build
+  #     
+  #     - name: Package for Windows
+  #       run: npx electron-builder --win --x64 --arm64
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: windows-builds
+  #         path: out/*-setup.exe
 
-  build-linux:
-    name: Build Linux (x64 + ARM64)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Build application
-        run: npx electron-vite build
-      
-      - name: Package for Linux
-        run: npx electron-builder --linux --x64 --arm64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-builds
-          path: |
-            out/*.AppImage
-            out/*.deb
-            out/*.rpm
+  # build-linux:
+  #   name: Build Linux (x64 + ARM64)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #     
+  #     - name: Install dependencies
+  #       run: npm ci
+  #     
+  #     - name: Build application
+  #       run: npx electron-vite build
+  #     
+  #     - name: Package for Linux
+  #       run: npx electron-builder --linux --x64 --arm64
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: linux-builds
+  #         path: |
+  #           out/*.AppImage
+  #           out/*.deb
+  #           out/*.rpm
 
   release:
     name: Create Release
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos]  # Only depends on macOS for now
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -108,10 +111,6 @@ jobs:
         with:
           files: |
             macos-builds/*.dmg
-            windows-builds/*-setup.exe
-            linux-builds/*.AppImage
-            linux-builds/*.deb
-            linux-builds/*.rpm
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
