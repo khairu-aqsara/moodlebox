@@ -1,0 +1,54 @@
+{
+  "latest_update": "2025-11-21",
+  "releases": [
+    {
+      "version": "5.1.0",
+      "changelog": "https://moodledev.io/general/releases/5.1",
+      "type": "stable",
+      "download": "https://github.com/moodle/moodle/archive/refs/tags/v5.1.0.zip",
+      "requirements": {
+        "php": "8.3",
+        "mysql": "8.4",
+        "postgres": "16"
+      },
+      "webroot": "public",
+      "composer": true
+    },
+    {
+      "version": "5.0.3",
+      "changelog": "https://moodledev.io/general/releases/5.0/5.0.3",
+      "type": "stable",
+      "download": "https://github.com/moodle/moodle/archive/refs/tags/v5.0.3.zip",
+      "requirements": {
+        "php": "8.3",
+        "mysql": "8.4",
+        "postgres": "16"
+      },
+      "composer": false
+    },
+    {
+      "version": "4.5.7",
+      "changelog": "https://moodledev.io/general/releases/4.5/4.5.7",
+      "type": "lts",
+      "download": "https://github.com/moodle/moodle/archive/refs/tags/v4.5.7.zip",
+      "requirements": {
+        "php": "8.1",
+        "mysql": "8.0",
+        "postgres": "13"
+      },
+      "composer": false
+    },
+    {
+      "version": "4.4.11",
+      "changelog": "https://moodledev.io/general/releases/4.4/4.4.11",
+      "type": "stable",
+      "download": "https://github.com/moodle/moodle/archive/refs/tags/v4.4.11.zip",
+      "requirements": {
+        "php": "8.1",
+        "mysql": "8.0",
+        "postgres": "13"
+      },
+      "composer": false
+    }
+  ]
+}
