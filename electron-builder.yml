@@ -44,9 +44,8 @@ asarUnpack:
   - resources/**
   - assets/**
 
-# Compress ASAR archive
+# ASAR is required
 asar: true
-compression: maximum
 
 # Only include English locale for Electron
 electronLanguages:
