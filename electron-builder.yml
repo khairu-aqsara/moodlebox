@@ -32,6 +32,10 @@ files:
   # Exclude all locales except English
   - '!**/node_modules/**/locales/**'
   - '**/node_modules/**/locales/en*.pak'
+  # Exclude source maps
+  - '!**/*.map'
+  - '!**/*.js.map'
+  # Exclude large unused icon sets (lucide-react tree-shakes automatically)
   - out/**/*
   - assets/**
   - package.json
@@ -39,6 +43,10 @@ files:
 asarUnpack:
   - resources/**
   - assets/**
+
+# Compress ASAR archive
+asar: true
+compression: maximum
 
 # Only include English locale for Electron
 electronLanguages:
