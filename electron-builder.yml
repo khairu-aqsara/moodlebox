@@ -16,7 +16,12 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!planning/*'
   - '!.github/*'
+  - '!BUILD_GUIDE.md'
+  - '!PRD.md'
+  - '!CLAUDE.md'
+  - out/**/*
   - assets/**
+  - package.json
 
 asarUnpack:
   - resources/**
