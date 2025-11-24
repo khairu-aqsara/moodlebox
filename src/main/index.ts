@@ -112,16 +112,20 @@ function setupIPCHandlers() {
   })
 }
 
+// App lifecycle
 app.whenReady().then(async () => {
   // Set app name for macOS menu bar
   app.name = 'MoodleBox'
-  
-  electronApp.setAppUserModelId('com.moodlebox.app')
 
+  // Set app user model id for windows
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.moodlebox')
+  }
+
+  // App window optimizations for macOS - handle Cmd+Q
   app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
     if (process.platform === 'darwin') {
-      window.webContents.on('before-input-event', (event, input) => {
+      window.webContents.on('before-input-event', (_event, input) => {
         if (input.meta && input.key.toLowerCase() === 'q') {
           app.quit()
         }
@@ -132,7 +136,7 @@ app.whenReady().then(async () => {
   // Load versions data
   await projectService.loadVersionsData()
 
-  // Sync project states with actual Docker container states
+  // Sync project states with Docker reality
   // This ensures the database reflects reality on app startup
   await projectService.syncProjectStates()
 
