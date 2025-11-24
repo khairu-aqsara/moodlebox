@@ -1,6 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
@@ -121,6 +120,13 @@ app.whenReady().then(async () => {
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    if (process.platform === 'darwin') {
+      window.webContents.on('before-input-event', (event, input) => {
+        if (input.meta && input.key.toLowerCase() === 'q') {
+          app.quit()
+        }
+      })
+    }
   })
 
   // Load versions data
@@ -130,9 +136,7 @@ app.whenReady().then(async () => {
   // This ensures the database reflects reality on app startup
   await projectService.syncProjectStates()
 
-  // Setup IPC
   setupIPCHandlers()
-
   createWindow()
 
   app.on('activate', function () {
