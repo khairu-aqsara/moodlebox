@@ -113,6 +113,8 @@ export class ProjectService {
       ...project,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      // Generate random port for database (10000-60000)
+      dbPort: Math.floor(Math.random() * (60000 - 10000 + 1) + 10000)
     }
 
     // Create project directory

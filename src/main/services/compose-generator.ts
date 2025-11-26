@@ -73,6 +73,8 @@ export class ComposeGenerator {
       --innodb_flush_log_at_trx_commit=2
       --max_connections=200
       --skip-name-resolve
+    ports:
+      - "${project.dbPort || 3306}:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=${password}
       - MYSQL_DATABASE=moodle
