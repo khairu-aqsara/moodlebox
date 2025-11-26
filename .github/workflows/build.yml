@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-builds
-          path: out/*.dmg
+          path: dist/*.dmg
 
   # Windows and Linux builds disabled for now
   # Uncomment when ready to build for all platforms
@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-builds
-          path: out/*-setup.exe
+          path: dist/*-setup.exe
 
   build-linux:
     name: Build Linux (x64 + ARM64)
@@ -96,9 +96,9 @@ jobs:
         with:
           name: linux-builds
           path: |
-            out/*.AppImage
-            out/*.deb
-            out/*.rpm
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
 
   release:
     name: Create Release

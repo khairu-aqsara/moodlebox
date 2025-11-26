@@ -1,6 +1,6 @@
 {
   "name": "moodlebox",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A local Moodle development environment for everyone",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -31,6 +31,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
     "extract-zip": "^2.0.1",
     "lucide-react": "^0.554.0",
