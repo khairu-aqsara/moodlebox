@@ -6,12 +6,19 @@ import log from 'electron-log'
 /**
  * Get the correct path to assets in both development and production
  * In development: uses relative path from __dirname
- * In production: uses process.resourcesPath (assets are unpacked from asar)
+ * In production: assets are unpacked from asar to app.asar.unpacked/assets/
  */
 export function getAssetPath(...pathSegments: string[]): string {
   if (app.isPackaged) {
     // In production, assets are unpacked to app.asar.unpacked/assets/
-    return join(process.resourcesPath, 'assets', ...pathSegments)
+    // process.resourcesPath points to Contents/Resources/ on macOS
+    const resourcesPath = process.resourcesPath
+    const assetPath = join(resourcesPath, 'app.asar.unpacked', 'assets', ...pathSegments)
+
+    log.info(`Asset path: ${assetPath}`)
+    log.info(`Resources path: ${resourcesPath}`)
+
+    return assetPath
   } else {
     // In development, assets are in the assets/ directory relative to __dirname
     return join(__dirname, '../../assets', ...pathSegments)
