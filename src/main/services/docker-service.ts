@@ -14,7 +14,7 @@ export class DockerService {
    */
   async checkDockerInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
-      const proc = spawn('docker', ['info'], { windowsHide: true })
+      const proc = spawn('docker', ['info'], { windowsHide: true, env: process.env })
       proc.on('close', (code) => resolve(code === 0))
       proc.on('error', () => resolve(false))
     })
@@ -27,7 +27,8 @@ export class DockerService {
     return new Promise((resolve) => {
       const proc = spawn('docker', ['compose', 'ps', '--format', 'json'], {
         cwd: projectPath,
-        windowsHide: true
+        windowsHide: true,
+        env: process.env
       })
 
       let output = ''
@@ -68,7 +69,8 @@ export class DockerService {
     return new Promise((resolve) => {
       const proc = spawn('docker', ['compose', 'ps', '--format', 'json'], {
         cwd: projectPath,
-        windowsHide: true
+        windowsHide: true,
+        env: process.env
       })
 
       let output = ''
@@ -195,7 +197,8 @@ export class DockerService {
 
       const proc = spawn('docker', ['inspect', fullContainerName, '--format', '{{json .State}}'], {
         cwd,
-        windowsHide: true
+        windowsHide: true,
+        env: process.env
       })
 
       let output = ''
@@ -239,7 +242,8 @@ export class DockerService {
 
       const proc = spawn('docker', ['inspect', fullContainerName, '--format', '{{json .State}}'], {
         cwd,
-        windowsHide: true
+        windowsHide: true,
+        env: process.env
       })
 
       let output = ''
@@ -294,7 +298,8 @@ export class DockerService {
     return new Promise((resolve, reject) => {
       const proc = spawn('docker', ['compose', ...args], {
         cwd: options.cwd,
-        windowsHide: true
+        windowsHide: true,
+        env: process.env
       })
 
       let stderr = ''
@@ -340,6 +345,21 @@ export class DockerService {
         )
         reject(enhancedError)
       })
+    })
+  }
+
+  /**
+   * Check if a port is available
+   */
+  async checkPort(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = require('net').createServer()
+      server.once('error', () => resolve(false))
+      server.once('listening', () => {
+        server.close()
+        resolve(true)
+      })
+      server.listen(port)
     })
   }
 

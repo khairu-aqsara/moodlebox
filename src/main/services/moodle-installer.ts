@@ -10,6 +10,7 @@ export interface DockerExecOptions {
   cwd: string
   onStdout?: (data: string) => void
   onStderr?: (data: string) => void
+  env?: Record<string, string>
 }
 
 export class MoodleInstaller {
@@ -112,7 +113,6 @@ export class MoodleInstaller {
       'mysql',
       '-h', '127.0.0.1',
       '-u', 'root',
-      `-p${dbPassword}`,
       '-e',
       'DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON moodle.* TO moodle@\'%\';'
     ]
@@ -122,7 +122,8 @@ export class MoodleInstaller {
       command: dropCommand,
       cwd: projectPath,
       onStdout: onLog,
-      onStderr: onLog
+      onStderr: onLog,
+      env: { MYSQL_PWD: dbPassword }
     })
 
     onLog?.('✓ Database cleaned')
@@ -264,11 +265,11 @@ export class MoodleInstaller {
         'compose',
         'exec',
         '-T',
+        '-e', `MYSQL_PWD=${dbPassword}`,
         'db',
         'mysql',
         '-h', '127.0.0.1',
         '-u', 'moodle',
-        `-p${dbPassword}`,
         'moodle',
         '-e',
         'SELECT COUNT(*) FROM mdl_config;'
@@ -306,6 +307,7 @@ export class MoodleInstaller {
         'compose',
         'exec',
         '-T', // Disable TTY
+        ...(options.env ? Object.entries(options.env).flatMap(([k, v]) => ['-e', `${k}=${v}`]) : []),
         options.container,
         ...options.command
       ]
