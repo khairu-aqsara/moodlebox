@@ -1,8 +1,9 @@
 import { spawn } from 'child_process'
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
 import { MoodleVersion } from '../types'
+import log from 'electron-log'
+import { getAssetPath } from '../utils/asset-path'
 
 export interface DockerExecOptions {
   container: string
@@ -19,9 +20,9 @@ export class MoodleInstaller {
    */
   async createConfig(projectPath: string, port: number, version: MoodleVersion): Promise<void> {
     // Read config template
-    const templatePath = app.isPackaged
-      ? join(process.resourcesPath, 'assets', 'config.php')
-      : join(__dirname, '../../assets/config.php')
+    const templatePath = getAssetPath('config.php')
+
+    log.info(`Loading config template from: ${templatePath}`)
 
     let configContent = await fs.readFile(templatePath, 'utf-8')
 
@@ -34,10 +35,19 @@ export class MoodleInstaller {
     configContent = configContent.replace('http://localhost:8080', `http://localhost:${port}`)
 
     // Database settings - need to match docker-compose
-    configContent = configContent.replace(/\$CFG->dbtype\s*=\s*'[^']+';/, "$CFG->dbtype    = 'mysqli';")
+    configContent = configContent.replace(
+      /\$CFG->dbtype\s*=\s*'[^']+';/,
+      "$CFG->dbtype    = 'mysqli';"
+    )
     configContent = configContent.replace(/\$CFG->dbhost\s*=\s*'[^']+';/, "$CFG->dbhost    = 'db';")
-    configContent = configContent.replace(/\$CFG->dbuser\s*=\s*'[^']+';/, "$CFG->dbuser    = 'moodle';")
-    configContent = configContent.replace(/\$CFG->dbpass\s*=\s*'[^']+';/, `$CFG->dbpass    = '${dbPassword}';`)
+    configContent = configContent.replace(
+      /\$CFG->dbuser\s*=\s*'[^']+';/,
+      "$CFG->dbuser    = 'moodle';"
+    )
+    configContent = configContent.replace(
+      /\$CFG->dbpass\s*=\s*'[^']+';/,
+      `$CFG->dbpass    = '${dbPassword}';`
+    )
 
     // Remove Redis session handling if present (we don't have Redis in docker-compose)
     configContent = configContent.replace(/\/\/ Session settings.*?\$CFG->pathtophp[^\n]*\n/s, '')
@@ -111,10 +121,12 @@ export class MoodleInstaller {
     // Drop and recreate the database using mysql command
     const dropCommand = [
       'mysql',
-      '-h', '127.0.0.1',
-      '-u', 'root',
+      '-h',
+      'db', // Use service name instead of host IP
+      '-u',
+      'root',
       '-e',
-      'DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON moodle.* TO moodle@\'%\';'
+      "DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON moodle.* TO moodle@'%';"
     ]
 
     await this.dockerExec({
@@ -155,7 +167,13 @@ export class MoodleInstaller {
   /**
    * Run Moodle CLI installation
    */
-  async install(projectPath: string, projectName: string, port: number, version: MoodleVersion, onLog?: (log: string) => void): Promise<void> {
+  async install(
+    projectPath: string,
+    projectName: string,
+    port: number,
+    version: MoodleVersion,
+    onLog?: (log: string) => void
+  ): Promise<void> {
     // First, clean up any partial installation
     await this.cleanDatabase(projectPath, onLog)
 
@@ -173,9 +191,12 @@ export class MoodleInstaller {
     // Then run database installation with increased PHP timeouts
     const command = [
       'php',
-      '-d', 'max_execution_time=0',           // No execution time limit
-      '-d', 'memory_limit=2048M',             // More memory
-      '-d', 'default_socket_timeout=7200',    // Socket timeout 2 hours
+      '-d',
+      'max_execution_time=0', // No execution time limit
+      '-d',
+      'memory_limit=2048M', // More memory
+      '-d',
+      'default_socket_timeout=7200', // Socket timeout 2 hours
       'admin/cli/install_database.php',
       '--lang=en',
       '--adminuser=admin',
@@ -257,7 +278,10 @@ export class MoodleInstaller {
   async isInstalled(projectPath: string): Promise<boolean> {
     return new Promise((resolve) => {
       // Check if mdl_config table exists in the database
-      const composeContent = require('fs').readFileSync(require('path').join(projectPath, 'docker-compose.yml'), 'utf-8')
+      const composeContent = require('fs').readFileSync(
+        require('path').join(projectPath, 'docker-compose.yml'),
+        'utf-8'
+      )
       const passwordMatch = composeContent.match(/MYSQL_PASSWORD[=:]\s*['"]?([^'"\s]+)['"]?/)
       const dbPassword = passwordMatch ? passwordMatch[1] : 'moodle'
 
@@ -265,11 +289,14 @@ export class MoodleInstaller {
         'compose',
         'exec',
         '-T',
-        '-e', `MYSQL_PWD=${dbPassword}`,
+        '-e',
+        `MYSQL_PWD=${dbPassword}`,
         'db',
         'mysql',
-        '-h', '127.0.0.1',
-        '-u', 'moodle',
+        '-h',
+        'db', // Use service name instead of host IP
+        '-u',
+        'moodle',
         'moodle',
         '-e',
         'SELECT COUNT(*) FROM mdl_config;'
@@ -307,7 +334,9 @@ export class MoodleInstaller {
         'compose',
         'exec',
         '-T', // Disable TTY
-        ...(options.env ? Object.entries(options.env).flatMap(([k, v]) => ['-e', `${k}=${v}`]) : []),
+        ...(options.env
+          ? Object.entries(options.env).flatMap(([k, v]) => ['-e', `${k}=${v}`])
+          : []),
         options.container,
         ...options.command
       ]
