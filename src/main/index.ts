@@ -1,9 +1,24 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import icon from '../../resources/icon.png?asset'
+import icon from '../../build/icon.png?asset'
 import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
 import { Project } from './types'
+import log from 'electron-log'
+
+// Fix PATH for macOS packaged apps
+// macOS packaged apps don't inherit shell PATH, so we add common paths
+if (process.platform === 'darwin' && app.isPackaged) {
+  process.env.PATH = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    process.env.PATH
+  ].join(':')
+}
 
 // Initialize services
 const projectService = new ProjectService()
@@ -114,38 +129,57 @@ function setupIPCHandlers() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Set app name for macOS menu bar
-  app.name = 'MoodleBox'
+  log.info('MoodleBox starting...')
 
-  // Set app user model id for windows
-  if (process.platform === 'win32') {
-    app.setAppUserModelId('com.moodlebox')
-  }
+  try {
+    // Set app name for macOS menu bar
+    app.name = 'MoodleBox'
 
-  // App window optimizations for macOS - handle Cmd+Q
-  app.on('browser-window-created', (_, window) => {
-    if (process.platform === 'darwin') {
-      window.webContents.on('before-input-event', (_event, input) => {
-        if (input.meta && input.key.toLowerCase() === 'q') {
-          app.quit()
-        }
-      })
+    // Set app user model id for windows
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('com.moodlebox')
     }
-  })
 
-  // Load versions data
-  await projectService.loadVersionsData()
+    // App window optimizations for macOS - handle Cmd+Q
+    app.on('browser-window-created', (_, window) => {
+      if (process.platform === 'darwin') {
+        window.webContents.on('before-input-event', (_event, input) => {
+          if (input.meta && input.key.toLowerCase() === 'q') {
+            app.quit()
+          }
+        })
+      }
+    })
 
-  // Sync project states with Docker reality
-  // This ensures the database reflects reality on app startup
-  await projectService.syncProjectStates()
+    // Load versions data
+    log.info('Loading versions data...')
+    await projectService.loadVersionsData()
+    log.info('Versions data loaded successfully')
 
-  setupIPCHandlers()
-  createWindow()
+    // Sync project states with Docker reality
+    // This ensures the database reflects reality on app startup
+    log.info('Syncing project states...')
+    await projectService.syncProjectStates()
+    log.info('Project states synced')
 
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+    setupIPCHandlers()
+    
+    log.info('Creating window...')
+    createWindow()
+    log.info('Window created successfully')
+
+    app.on('activate', function () {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  } catch (error) {
+    log.error('Critical error during app initialization:', error)
+    // Show error dialog to user
+    dialog.showErrorBox(
+      'MoodleBox Initialization Error',
+      `Failed to start MoodleBox:\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck logs at: ${log.transports.file.getFile().path}`
+    )
+    app.quit()
+  }
 })
 
 app.on('window-all-closed', () => {

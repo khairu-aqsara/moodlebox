@@ -14,9 +14,7 @@ export class DockerService {
    */
   async checkDockerInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
-      // docker info requires the daemon to be running
       const proc = spawn('docker', ['info'], { windowsHide: true })
-      
       proc.on('close', (code) => resolve(code === 0))
       proc.on('error', () => resolve(false))
     })

@@ -4,7 +4,7 @@ copyright: Copyright © 2025 MoodleBox Team
 
 directories:
   buildResources: build
-  output: out
+  output: dist
 
 # Files to include in all builds
 files:
@@ -35,7 +35,7 @@ files:
   # Exclude source maps
   - '!**/*.map'
   - '!**/*.js.map'
-  # Exclude large unused icon sets (lucide-react tree-shakes automatically)
+  # Include necessary directories
   - out/**/*
   - assets/**
   - package.json

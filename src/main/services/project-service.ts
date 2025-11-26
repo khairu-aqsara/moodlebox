@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import { DockerService } from './docker-service'
 import { ComposeGenerator } from './compose-generator'
 import { join } from 'path'
-import { app, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import Store from 'electron-store'
 
 interface ProjectStoreSchema {
@@ -27,9 +27,9 @@ export class ProjectService {
   }
 
   async loadVersionsData(): Promise<void> {
-    const versionsPath = app.isPackaged
-      ? join(process.resourcesPath, 'assets', 'versions.json')
-      : join(__dirname, '../../assets/versions.json')
+    // Use relative path from __dirname which works in both dev and production
+    // In production, assets are unpacked at app.asar.unpacked/assets maintaining the same relative structure
+    const versionsPath = join(__dirname, '../../assets/versions.json')
 
     const data = await fs.readFile(versionsPath, 'utf-8')
     this.versionsData = JSON.parse(data)
