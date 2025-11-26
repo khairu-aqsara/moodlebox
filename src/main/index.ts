@@ -5,34 +5,57 @@ import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
 import { Project } from './types'
 
+// Declare the variables injected by Electron Forge Vite plugin
+declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string
+declare const MAIN_WINDOW_VITE_NAME: string
+
 // Initialize services
 const projectService = new ProjectService()
 const settingsService = new SettingsService()
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  console.log('[Main] Creating window...')
+  mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
-    show: false,
+    show: true,
     resizable: false,
     title: 'MoodleBox',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      devTools: true
     }
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    console.log('[Main] Window ready-to-show event fired')
+    if (mainWindow) mainWindow.show()
   })
+
+  // Load the renderer using the standard Forge pattern
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    console.log('[Main] Loading from dev server:', MAIN_WINDOW_VITE_DEV_SERVER_URL)
+    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+  } else {
+    // In production, load from the build directory
+    // The path is relative to the main process output (.vite/build/index.js)
+    // Renderer output is in .vite/renderer/main_window/index.html
+    const rendererPath = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
+    console.log('[Main] Loading from file:', rendererPath)
+    mainWindow.loadFile(rendererPath).catch(err => {
+      console.error('[Main] loadFile error:', err)
+    })
+  }
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
-
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
