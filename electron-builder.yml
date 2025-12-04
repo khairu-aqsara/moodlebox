@@ -97,12 +97,12 @@ win:
   executableName: MoodleBox
   publisherName: MoodleBox Team
   # Code signing configuration (optional via environment variables)
-  # Set CSC_LINK to path of .pfx certificate file, or CSC_NAME for certificate store
-  # Set CSC_KEY_PASSWORD if certificate is password-protected
-  # If not set, builds will be unsigned (works for CI/CD)
-  # electron-builder will automatically sign when CSC_LINK or CSC_NAME is set
-  certificateFile: ${env.CSC_LINK}
-  certificatePassword: ${env.CSC_KEY_PASSWORD}
+  # For unsigned builds (CI/CD): leave certificateFile as null
+  # For signed builds: Set CSC_LINK environment variable to path of .pfx certificate file
+  # electron-builder will automatically detect CSC_LINK env var and sign when present
+  # If CSC_LINK is not set, builds will be unsigned (works for CI/CD)
+  certificateFile: null
+  certificatePassword: null
   sign: null
 
 nsis:
