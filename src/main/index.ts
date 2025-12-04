@@ -7,6 +7,59 @@ import { Project } from './types'
 import log from 'electron-log'
 import { verifyAssets } from './utils/asset-path'
 
+// Configure electron-log for production file logging
+log.transports.file.level = 'info' // Log info, warn, and error in production
+log.transports.console.level = app.isPackaged ? 'warn' : 'debug' // Only show warnings/errors in console for production
+
+// Configure log file settings
+log.transports.file.maxSize = 10 * 1024 * 1024 // 10MB max file size
+log.transports.file.archiveLogFn = (oldLogFile) => {
+  // Archive old logs with timestamp
+  const path = require('path')
+  const fs = require('fs')
+  const logPath = typeof oldLogFile === 'string' ? oldLogFile : oldLogFile.path
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const archivePath = path.join(path.dirname(logPath), `main-${timestamp}.log`)
+  try {
+    fs.renameSync(logPath, archivePath)
+  } catch (error) {
+    // Ignore errors during archiving
+  }
+  return archivePath
+}
+
+/**
+ * Configure log file location to use workspace folder
+ * This will be called after app is ready and settings are loaded
+ */
+function configureLogLocation(): void {
+  try {
+    const settings = settingsService.getSettings()
+    const workspaceFolder = settings.workspaceFolder || join(app.getPath('documents'), 'MoodleBox')
+    const logsFolder = join(workspaceFolder, '.moodlebox', 'logs')
+    const logFile = join(logsFolder, 'main.log')
+
+    // Ensure logs directory exists
+    const fs = require('fs')
+    if (!fs.existsSync(logsFolder)) {
+      fs.mkdirSync(logsFolder, { recursive: true })
+    }
+
+    // Update log file location
+    log.transports.file.resolvePathFn = () => logFile
+
+    log.info(`Log file configured: ${logFile}`)
+  } catch (error) {
+    // If settings not available yet or error, use default location
+    log.warn('Could not configure log location from workspace folder, using default:', error)
+  }
+}
+
+// Log app startup (before workspace folder is configured)
+log.info('='.repeat(60))
+log.info(`MoodleBox starting - Version ${app.getVersion()}`)
+log.info(`Platform: ${process.platform}, Packaged: ${app.isPackaged}`)
+
 // Fix PATH for macOS packaged apps
 // macOS packaged apps don't inherit shell PATH, so we add common paths
 if (process.platform === 'darwin' && app.isPackaged) {
@@ -116,13 +169,37 @@ function setupIPCHandlers() {
     return await projectService.checkDocker()
   })
 
+  // Sync project states (can be called manually from renderer)
+  ipcMain.handle('projects:syncStates', async () => {
+    await projectService.syncProjectStates()
+  })
+
+  // Get log file path (for debugging/support)
+  ipcMain.handle('app:getLogPath', () => {
+    return log.transports.file.getFile().path
+  })
+
+  // Open log file location in file manager
+  ipcMain.handle('app:openLogFolder', () => {
+    const logPath = log.transports.file.getFile().path
+    const path = require('path')
+    const logDir = path.dirname(logPath)
+    shell.openPath(logDir)
+  })
+
   // Settings handlers
   ipcMain.handle('settings:get', () => {
     return settingsService.getSettings()
   })
 
   ipcMain.handle('settings:update', (_, updates) => {
-    return settingsService.updateSettings(updates)
+    const newSettings = settingsService.updateSettings(updates)
+    // If workspace folder changed, reconfigure log location
+    if (updates.workspaceFolder) {
+      configureLogLocation()
+      log.info(`Log location updated to workspace folder: ${updates.workspaceFolder}`)
+    }
+    return newSettings
   })
 
   ipcMain.handle('settings:selectFolder', async () => {
@@ -152,14 +229,22 @@ app.whenReady().then(async () => {
       app.setAppUserModelId('com.moodlebox')
     }
 
+    // Configure log location to use workspace folder (must be done early)
+    configureLogLocation()
+    log.info(`Log file location: ${log.transports.file.getFile().path}`)
+    log.info('='.repeat(60))
+
     // App window optimizations for macOS - handle Cmd+Q
     app.on('browser-window-created', (_, window) => {
       if (process.platform === 'darwin') {
-        window.webContents.on('before-input-event', (_event, input) => {
+        const handleBeforeInput = (_event: Electron.Event, input: Electron.Input) => {
           if (input.meta && input.key.toLowerCase() === 'q') {
             app.quit()
           }
-        })
+        }
+        window.webContents.on('before-input-event', handleBeforeInput)
+        // Note: No cleanup needed - Electron automatically removes listeners when window is destroyed
+        // Attempting to manually remove can cause errors if window is already destroyed
       }
     })
 

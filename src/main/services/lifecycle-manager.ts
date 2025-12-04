@@ -68,20 +68,26 @@ export class LifecycleManager {
     if (!alreadyDownloaded) {
       onStatusUpdate('provisioning', undefined, 'Downloading Moodle source code...')
       onLog?.('📥 Downloading Moodle source code...')
+      onLog?.('💡 Tip: Large downloads may take 20-30+ minutes on slow connections. Progress will be shown below.')
 
       await this.downloader.download(
         moodleDownloadUrl,
         project.path,
         (percentage, downloaded, total) => {
+          const downloadedMB = (downloaded / 1024 / 1024).toFixed(1)
+          const totalMB = (total / 1024 / 1024).toFixed(1)
           const progressInfo: ProgressInfo = {
             phase: 'download',
             percentage,
             current: downloaded,
             total,
-            message: `Downloading: ${percentage.toFixed(0)}% (${(downloaded / 1024 / 1024).toFixed(1)}MB / ${(total / 1024 / 1024).toFixed(1)}MB)`
+            message: `Downloading: ${percentage.toFixed(0)}% (${downloadedMB}MB / ${totalMB}MB)`
           }
           onStatusUpdate('provisioning', undefined, progressInfo.message, progressInfo)
-          onLog?.(`📥 ${progressInfo.message}`)
+          // Only log every 10% to avoid spam, but always update UI
+          if (percentage % 10 < 1 || percentage >= 100) {
+            onLog?.(`📥 ${progressInfo.message}`)
+          }
         }
       )
 
@@ -227,25 +233,57 @@ export class LifecycleManager {
     const startTime = Date.now()
     const url = `http://localhost:${port}`
     let attempts = 0
+    let timeoutId: NodeJS.Timeout | null = null
 
-    while (Date.now() - startTime < timeoutMs) {
-      attempts++
-      try {
-        const response = await fetch(url, { timeout: 2000 } as any)
-        onLog?.(`  Attempt ${attempts}: Got HTTP ${response.status}`)
+    try {
+      while (Date.now() - startTime < timeoutMs) {
+        attempts++
+        try {
+          // Use AbortController for proper timeout handling
+          const controller = new AbortController()
+          timeoutId = setTimeout(() => controller.abort(), 2000)
 
-        if (response.ok || response.status === 303) {
-          // 303 is Moodle's redirect, which means it's up
-          return
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'MoodleBox/1.0'
+            }
+          } as any)
+
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
+
+          onLog?.(`  Attempt ${attempts}: Got HTTP ${response.status}`)
+
+          if (response.ok || response.status === 303) {
+            // 303 is Moodle's redirect, which means it's up
+            return
+          }
+        } catch (err: any) {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
+
+          if (err.name === 'AbortError') {
+            onLog?.(`  Attempt ${attempts}: Timeout`)
+          } else {
+            onLog?.(`  Attempt ${attempts}: ${err?.code || err?.message || 'Connection failed'}`)
+          }
         }
-      } catch (err: any) {
-        onLog?.(`  Attempt ${attempts}: ${err?.code || err?.message || 'Connection failed'}`)
+
+        // Wait 2 seconds before next check
+        await new Promise((resolve) => setTimeout(resolve, 2000))
       }
 
-      // Wait 2 seconds before next check
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      throw new Error(`Timeout waiting for Moodle to respond at ${url} after ${attempts} attempts`)
+    } finally {
+      // Clean up any pending timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
-
-    throw new Error(`Timeout waiting for Moodle to respond at ${url} after ${attempts} attempts`)
   }
 }

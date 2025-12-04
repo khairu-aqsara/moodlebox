@@ -56,14 +56,36 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   }
 }))
 
-// Listen for project updates from main process
-window.api.projects.onLog((data) => {
-  console.log(`[${data.id}] ${data.log}`)
-})
+// Store IPC listener cleanup functions
+let logListenerCleanup: (() => void) | null = null
+let updateListenerCleanup: (() => void) | null = null
 
-// Listen for project state updates
-window.api.projects.onProjectUpdate(({ id, updates }) => {
-  useProjectStore.setState((state) => ({
-    projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
-  }))
-})
+// Listen for project updates from main process
+const setupIPCListeners = () => {
+  // Clean up existing listeners if any
+  if (logListenerCleanup) logListenerCleanup()
+  if (updateListenerCleanup) updateListenerCleanup()
+
+  // Set up log listener (logs are handled by main process)
+  logListenerCleanup = window.api.projects.onLog(() => {
+    // Logs are handled by main process, no need to log here
+  })
+
+  // Set up project state update listener
+  updateListenerCleanup = window.api.projects.onProjectUpdate(({ id, updates }) => {
+    useProjectStore.setState((state) => ({
+      projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
+    }))
+  })
+}
+
+// Initialize listeners when store is created
+setupIPCListeners()
+
+// Cleanup on page unload (though Electron apps typically don't unload)
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (logListenerCleanup) logListenerCleanup()
+    if (updateListenerCleanup) updateListenerCleanup()
+  })
+}

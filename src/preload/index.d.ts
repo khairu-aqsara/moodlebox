@@ -6,18 +6,23 @@ declare global {
     api: {
       projects: {
         getAll: () => Promise<Project[]>
-        create: (project: any) => Promise<Project>
+        create: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<Project>
         start: (id: string) => Promise<void>
         stop: (id: string) => Promise<void>
         delete: (id: string) => Promise<void>
         openFolder: (path: string) => Promise<void>
         openBrowser: (port: number) => Promise<void>
         getDefaultPath: () => Promise<string>
-        onLog: (callback: (data: { id: string; log: string }) => void) => void
+        onLog: (callback: (data: { id: string; log: string }) => void) => () => void
         onProjectUpdate: (
           callback: (data: { id: string; updates: Partial<Project> }) => void
-        ) => void
+        ) => () => void
         checkDocker: () => Promise<boolean>
+        syncStates: () => Promise<void>
+      }
+      app: {
+        getLogPath: () => Promise<string>
+        openLogFolder: () => Promise<void>
       }
       settings: {
         get: () => Promise<AppSettings>
@@ -39,7 +44,7 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'error'
+  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
   path: string
   createdAt: string
   lastUsed?: string

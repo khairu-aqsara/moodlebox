@@ -47,9 +47,35 @@ export class ProjectService {
   /**
    * Sync all projects with actual Docker container states
    * Call this on app startup to ensure database reflects reality
+   * Also handles the case where user closed app without stopping containers
    */
   async syncProjectStates(): Promise<void> {
     const projects = this.getAllProjects()
+
+    if (projects.length === 0) {
+      log.info('No projects to sync')
+      return
+    }
+
+    // Check if Docker is available first
+    const dockerAvailable = await this.dockerService.checkDockerInstalled()
+    if (!dockerAvailable) {
+      log.warn('Docker not available during sync - marking all projects as stopped')
+      // If Docker is not running, mark all projects as stopped
+      for (const project of projects) {
+        if (project.status !== 'stopped' && project.status !== 'error') {
+          this.updateProject(project.id, {
+            status: 'stopped',
+            statusDetail: 'Docker not running',
+            errorMessage: undefined,
+            progress: undefined
+          })
+        }
+      }
+      return
+    }
+
+    log.info(`Syncing ${projects.length} project(s) with Docker container states...`)
 
     for (const project of projects) {
       try {
@@ -58,6 +84,7 @@ export class ProjectService {
           await fs.access(project.path)
         } catch {
           // Project folder doesn't exist, mark as stopped
+          log.warn(`Project folder not found: ${project.path}`)
           if (project.status !== 'stopped') {
             this.updateProject(project.id, { status: 'stopped' })
           }
@@ -65,21 +92,29 @@ export class ProjectService {
         }
 
         // Check actual container status
+        log.debug(`Checking container status for project ${project.name} at path: ${project.path}`)
         const containerStatus = await this.dockerService.getProjectContainerStatus(project.path)
+        log.debug(
+          `Container status for ${project.name}: running=${containerStatus.running}, healthy=${containerStatus.healthy}, count=${containerStatus.containerCount}`
+        )
 
         if (containerStatus.running && containerStatus.healthy) {
-          // Containers are running and healthy
+          // Containers are running and healthy - user likely closed app without stopping
           if (project.status !== 'ready') {
+            log.info(`Project ${project.name} has running containers - updating status to ready`)
             this.updateProject(project.id, {
               status: 'ready',
               statusDetail: `Ready at http://localhost:${project.port}`,
               errorMessage: undefined,
               progress: undefined
             })
+          } else {
+            log.debug(`Project ${project.name} already marked as ready, no update needed`)
           }
         } else if (containerStatus.running && !containerStatus.healthy) {
           // Containers running but not healthy - mark as starting
           if (project.status !== 'starting' && project.status !== 'waiting') {
+            log.info(`Project ${project.name} containers running but not healthy - updating status`)
             this.updateProject(project.id, {
               status: 'starting',
               statusDetail: 'Containers starting...',
@@ -90,22 +125,29 @@ export class ProjectService {
         } else {
           // No containers running - mark as stopped
           if (project.status !== 'stopped' && project.status !== 'error') {
+            log.info(
+              `Project ${project.name} has no running containers (running=${containerStatus.running}, count=${containerStatus.containerCount}) - updating status to stopped`
+            )
             this.updateProject(project.id, {
               status: 'stopped',
               statusDetail: undefined,
               errorMessage: undefined,
               progress: undefined
             })
+          } else {
+            log.debug(`Project ${project.name} already marked as stopped, no update needed`)
           }
         }
       } catch (error) {
-        console.error(`Error syncing project ${project.id}:`, error)
+        log.error(`Error syncing project ${project.id}:`, error)
         // On error, mark as stopped to be safe
         if (project.status !== 'stopped' && project.status !== 'error') {
           this.updateProject(project.id, { status: 'stopped' })
         }
       }
     }
+
+    log.info('Project state sync completed')
   }
 
   getAllProjects(): Project[] {
@@ -172,7 +214,7 @@ export class ProjectService {
         removeVolumes: true
       })
     } catch (error) {
-      console.error('Error cleaning up Docker resources:', error)
+      log.error('Error cleaning up Docker resources:', error)
       // Continue with deletion even if Docker cleanup fails
     }
 
@@ -180,7 +222,7 @@ export class ProjectService {
     try {
       await fs.rm(project.path, { recursive: true, force: true })
     } catch (error) {
-      console.error('Error deleting project directory:', error)
+      log.error('Error deleting project directory:', error)
       // Continue with database deletion even if directory deletion fails
     }
 
