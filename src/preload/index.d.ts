@@ -14,7 +14,9 @@ declare global {
         openBrowser: (port: number) => Promise<void>
         getDefaultPath: () => Promise<string>
         onLog: (callback: (data: { id: string; log: string }) => void) => void
-        onProjectUpdate: (callback: (data: { id: string; updates: Partial<Project> }) => void) => void
+        onProjectUpdate: (
+          callback: (data: { id: string; updates: Partial<Project> }) => void
+        ) => void
         checkDocker: () => Promise<boolean>
       }
       settings: {

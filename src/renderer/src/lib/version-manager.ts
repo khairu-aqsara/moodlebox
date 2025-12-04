@@ -7,12 +7,12 @@ class VersionManager {
   constructor() {
     // Validate the JSON data at runtime
     const result = VersionsDataSchema.safeParse(versionsData)
-    
+
     if (!result.success) {
       console.error('Invalid versions.json format:', result.error)
       throw new Error('Failed to load versions.json')
     }
-    
+
     this.data = result.data
   }
 
@@ -21,7 +21,7 @@ class VersionManager {
   }
 
   getVersionByNumber(version: string) {
-    return this.data.releases.find(r => r.version === version)
+    return this.data.releases.find((r) => r.version === version)
   }
 
   getLatestVersion() {
@@ -29,7 +29,7 @@ class VersionManager {
   }
 
   getLTSVersions() {
-    return this.data.releases.filter(r => r.type === 'lts')
+    return this.data.releases.filter((r) => r.type === 'lts')
   }
 
   getLastUpdate() {

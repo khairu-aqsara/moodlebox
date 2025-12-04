@@ -4,7 +4,16 @@ export interface Project {
   moodleVersion: string
   port: number
   dbPort?: number // External port for database access
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
+  status:
+    | 'provisioning'
+    | 'installing'
+    | 'starting'
+    | 'waiting'
+    | 'ready'
+    | 'stopped'
+    | 'stopping'
+    | 'deleting'
+    | 'error'
   path: string
   createdAt: string
   lastUsed?: string

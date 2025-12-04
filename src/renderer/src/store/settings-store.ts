@@ -21,8 +21,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ isLoading: true })
     try {
       const settings = await window.api.settings.get()
-      set({ 
-        theme: settings.theme, 
+      set({
+        theme: settings.theme,
         workspaceFolder: settings.workspaceFolder,
         phpMyAdminPort: settings.phpMyAdminPort
       })
@@ -34,16 +34,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   updateSettings: async (updates: Partial<AppSettings>) => {
-    const current = { 
-      theme: get().theme, 
+    const current = {
+      theme: get().theme,
       workspaceFolder: get().workspaceFolder,
       phpMyAdminPort: get().phpMyAdminPort
     }
-    
+
     try {
       const saved = await window.api.settings.update(updates)
-      set({ 
-        theme: saved.theme, 
+      set({
+        theme: saved.theme,
         workspaceFolder: saved.workspaceFolder,
         phpMyAdminPort: saved.phpMyAdminPort
       })

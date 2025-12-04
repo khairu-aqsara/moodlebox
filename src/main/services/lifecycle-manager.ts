@@ -3,8 +3,8 @@ import { MoodleDownloader } from './moodle-downloader'
 import { MoodleInstaller } from './moodle-installer'
 import { DockerService } from './docker-service'
 import fetch from 'node-fetch'
-import { app } from 'electron'
-import { join } from 'path'
+import log from 'electron-log'
+import { getAssetPath } from '../utils/asset-path'
 
 export class LifecycleManager {
   private downloader: MoodleDownloader
@@ -24,7 +24,12 @@ export class LifecycleManager {
     project: Project,
     moodleDownloadUrl: string,
     version: MoodleVersion,
-    onStatusUpdate: (status: Project['status'], errorMessage?: string, statusDetail?: string, progress?: ProgressInfo) => void,
+    onStatusUpdate: (
+      status: Project['status'],
+      errorMessage?: string,
+      statusDetail?: string,
+      progress?: ProgressInfo
+    ) => void,
     onLog?: (log: string) => void
   ): Promise<void> {
     const isFirstRun = !(await this.downloader.isDownloaded(project.path))
@@ -49,7 +54,12 @@ export class LifecycleManager {
     project: Project,
     moodleDownloadUrl: string,
     version: MoodleVersion,
-    onStatusUpdate: (status: Project['status'], errorMessage?: string, statusDetail?: string, progress?: ProgressInfo) => void,
+    onStatusUpdate: (
+      status: Project['status'],
+      errorMessage?: string,
+      statusDetail?: string,
+      progress?: ProgressInfo
+    ) => void,
     onLog?: (log: string) => void
   ): Promise<void> {
     // 1. Provisioning - Download Moodle (skip if already exists)
@@ -59,17 +69,21 @@ export class LifecycleManager {
       onStatusUpdate('provisioning', undefined, 'Downloading Moodle source code...')
       onLog?.('📥 Downloading Moodle source code...')
 
-      await this.downloader.download(moodleDownloadUrl, project.path, (percentage, downloaded, total) => {
-        const progressInfo: ProgressInfo = {
-          phase: 'download',
-          percentage,
-          current: downloaded,
-          total,
-          message: `Downloading: ${percentage.toFixed(0)}% (${(downloaded / 1024 / 1024).toFixed(1)}MB / ${(total / 1024 / 1024).toFixed(1)}MB)`
+      await this.downloader.download(
+        moodleDownloadUrl,
+        project.path,
+        (percentage, downloaded, total) => {
+          const progressInfo: ProgressInfo = {
+            phase: 'download',
+            percentage,
+            current: downloaded,
+            total,
+            message: `Downloading: ${percentage.toFixed(0)}% (${(downloaded / 1024 / 1024).toFixed(1)}MB / ${(total / 1024 / 1024).toFixed(1)}MB)`
+          }
+          onStatusUpdate('provisioning', undefined, progressInfo.message, progressInfo)
+          onLog?.(`📥 ${progressInfo.message}`)
         }
-        onStatusUpdate('provisioning', undefined, progressInfo.message, progressInfo)
-        onLog?.(`📥 ${progressInfo.message}`)
-      })
+      )
 
       onLog?.('✓ Moodle source downloaded successfully')
     } else {
@@ -86,7 +100,12 @@ export class LifecycleManager {
   private async subsequentRunFlow(
     project: Project,
     version: MoodleVersion,
-    onStatusUpdate: (status: Project['status'], errorMessage?: string, statusDetail?: string, progress?: ProgressInfo) => void,
+    onStatusUpdate: (
+      status: Project['status'],
+      errorMessage?: string,
+      statusDetail?: string,
+      progress?: ProgressInfo
+    ) => void,
     onLog?: (log: string) => void
   ): Promise<void> {
     // Start containers and check installation status
@@ -99,7 +118,12 @@ export class LifecycleManager {
   private async startAndInstall(
     project: Project,
     version: MoodleVersion,
-    onStatusUpdate: (status: Project['status'], errorMessage?: string, statusDetail?: string, progress?: ProgressInfo) => void,
+    onStatusUpdate: (
+      status: Project['status'],
+      errorMessage?: string,
+      statusDetail?: string,
+      progress?: ProgressInfo
+    ) => void,
     onLog?: (log: string) => void
   ): Promise<void> {
     // 1. Starting - Launch containers
@@ -127,8 +151,14 @@ export class LifecycleManager {
 
     if (!alreadyInstalled) {
       // 4. Installing - Create config and run Moodle CLI install
-      onStatusUpdate('installing', undefined, 'Installing Moodle (It may take some time, depending on your computer and internet.)...')
-      onLog?.('⚙️  Installing Moodle (It may take some time, depending on your computer and internet.)...')
+      onStatusUpdate(
+        'installing',
+        undefined,
+        'Installing Moodle (It may take some time, depending on your computer and internet.)...'
+      )
+      onLog?.(
+        '⚙️  Installing Moodle (It may take some time, depending on your computer and internet.)...'
+      )
       onLog?.('📝 Creating config.php...')
 
       await this.installer.install(project.path, project.name, project.port, version, onLog)
@@ -148,9 +178,9 @@ export class LifecycleManager {
       onStatusUpdate('installing', undefined, 'Restoring sample course...')
       onLog?.('📚 Restoring sample course...')
       try {
-        const courseBackupPath = app.isPackaged
-          ? join(process.resourcesPath, 'assets', 'courses.mbz')
-          : join(__dirname, '../../assets/courses.mbz')
+        const courseBackupPath = getAssetPath('courses.mbz')
+
+        log.info(`Loading course backup from: ${courseBackupPath}`)
 
         await this.installer.restoreCourse(project.path, courseBackupPath)
         onLog?.('✓ Sample course restored')
@@ -174,25 +204,26 @@ export class LifecycleManager {
   /**
    * Stop a project
    */
-  async stopProject(
-    project: Project,
-    onLog?: (log: string) => void
-  ): Promise<void> {
+  async stopProject(project: Project, onLog?: (log: string) => void): Promise<void> {
     onLog?.('Stopping containers...')
-    
+
     await this.dockerService.composeStop({
       cwd: project.path,
       onStdout: onLog,
       onStderr: onLog
     })
-    
+
     onLog?.('✓ Containers stopped')
   }
 
   /**
    * Wait for HTTP endpoint to respond
    */
-  private async waitForHttp(port: number, onLog?: (log: string) => void, timeoutMs = 60000): Promise<void> {
+  private async waitForHttp(
+    port: number,
+    onLog?: (log: string) => void,
+    timeoutMs = 60000
+  ): Promise<void> {
     const startTime = Date.now()
     const url = `http://localhost:${port}`
     let attempts = 0
@@ -212,7 +243,7 @@ export class LifecycleManager {
       }
 
       // Wait 2 seconds before next check
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
     throw new Error(`Timeout waiting for Moodle to respond at ${url} after ${attempts} attempts`)

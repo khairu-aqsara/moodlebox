@@ -3,7 +3,7 @@ import { MoodleVersion, Project } from '../types'
 export class ComposeGenerator {
   generate(project: Project, version: MoodleVersion): string {
     const webroot = version.webroot ? `/var/www/html/${version.webroot}` : '/var/www/html'
-    const commandOverride = version.webroot 
+    const commandOverride = version.webroot
       ? `command: /bin/bash -c "sed -i 's|/var/www/html|${webroot}|g' /etc/apache2/sites-available/000-default.conf && docker-php-entrypoint apache2-foreground"`
       : ''
 

@@ -15,29 +15,27 @@ interface ProjectStore {
 
 export const useProjectStore = create<ProjectStore>((set) => ({
   projects: [],
-  
+
   loadProjects: async () => {
     const projects = await window.api.projects.getAll()
     set({ projects })
   },
-  
+
   addProject: async (project) => {
     const newProject = await window.api.projects.create(project)
     set((state) => ({ projects: [...state.projects, newProject] }))
   },
-  
+
   updateProject: (id, updates) => {
     set((state) => ({
-      projects: state.projects.map((p) =>
-        p.id === id ? { ...p, ...updates } : p
-      ),
+      projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
     }))
   },
-  
+
   deleteProject: async (id) => {
     await window.api.projects.delete(id)
     set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id),
+      projects: state.projects.filter((p) => p.id !== id)
     }))
   },
 
@@ -55,7 +53,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   openBrowser: async (port) => {
     await window.api.projects.openBrowser(port)
-  },
+  }
 }))
 
 // Listen for project updates from main process
@@ -66,9 +64,6 @@ window.api.projects.onLog((data) => {
 // Listen for project state updates
 window.api.projects.onProjectUpdate(({ id, updates }) => {
   useProjectStore.setState((state) => ({
-    projects: state.projects.map((p) =>
-      p.id === id ? { ...p, ...updates } : p
-    )
+    projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
   }))
 })
-

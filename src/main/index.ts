@@ -5,6 +5,7 @@ import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
 import { Project } from './types'
 import log from 'electron-log'
+import { verifyAssets } from './utils/asset-path'
 
 // Fix PATH for macOS packaged apps
 // macOS packaged apps don't inherit shell PATH, so we add common paths
@@ -23,6 +24,17 @@ if (process.platform === 'darwin' && app.isPackaged) {
 // Initialize services
 const projectService = new ProjectService()
 const settingsService = new SettingsService()
+
+// Verify assets are accessible on startup
+verifyAssets()
+  .then((success) => {
+    if (!success) {
+      log.error('Asset verification failed. App may not function correctly.')
+    }
+  })
+  .catch((error) => {
+    log.error('Error during asset verification:', error)
+  })
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -163,7 +175,7 @@ app.whenReady().then(async () => {
     log.info('Project states synced')
 
     setupIPCHandlers()
-    
+
     log.info('Creating window...')
     createWindow()
     log.info('Window created successfully')

@@ -130,8 +130,8 @@ export class DockerService {
   async composeDown(options: DockerCommand & { removeVolumes?: boolean }): Promise<void> {
     const args = ['down']
     if (options.removeVolumes) {
-      args.push('--volumes')  // Remove named volumes
-      args.push('--remove-orphans')  // Remove orphaned containers
+      args.push('--volumes') // Remove named volumes
+      args.push('--remove-orphans') // Remove orphaned containers
     }
     return this.runDockerCompose(args, options)
   }
@@ -173,17 +173,17 @@ export class DockerService {
       }
 
       // Wait 3 seconds before next check
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      await new Promise((resolve) => setTimeout(resolve, 3000))
     }
 
     throw new Error(
       `Timeout waiting for ${containerName} to be healthy after ${timeoutMs / 1000} seconds\n\n` +
-      `Last known status: ${lastStatus}\n\n` +
-      `Troubleshooting:\n` +
-      `1. Check container logs: docker compose logs ${containerName}\n` +
-      `2. Check container status: docker compose ps\n` +
-      `3. The container may need more time to initialize\n` +
-      `4. Check if the container is stuck: docker compose exec ${containerName} ps aux`
+        `Last known status: ${lastStatus}\n\n` +
+        `Troubleshooting:\n` +
+        `1. Check container logs: docker compose logs ${containerName}\n` +
+        `2. Check container status: docker compose ps\n` +
+        `3. The container may need more time to initialize\n` +
+        `4. Check if the container is stuck: docker compose exec ${containerName} ps aux`
     )
   }
 
@@ -334,14 +334,14 @@ export class DockerService {
         // Handle cases where docker command itself fails (not installed, etc.)
         const enhancedError = new Error(
           `Docker command failed: ${err.message}\n\n` +
-          `Possible causes:\n` +
-          `- Docker is not installed\n` +
-          `- Docker daemon is not running\n` +
-          `- Docker is not in your system PATH\n\n` +
-          `To fix:\n` +
-          `- Install Docker Desktop from https://docker.com\n` +
-          `- Start Docker Desktop and wait for it to be ready\n` +
-          `- On Linux: Run "sudo systemctl start docker"`
+            `Possible causes:\n` +
+            `- Docker is not installed\n` +
+            `- Docker daemon is not running\n` +
+            `- Docker is not in your system PATH\n\n` +
+            `To fix:\n` +
+            `- Install Docker Desktop from https://docker.com\n` +
+            `- Start Docker Desktop and wait for it to be ready\n` +
+            `- On Linux: Run "sudo systemctl start docker"`
         )
         reject(enhancedError)
       })
@@ -383,7 +383,10 @@ export class DockerService {
     }
 
     // Port already in use
-    if (lowerStderr.includes('port is already allocated') || lowerStderr.includes('address already in use')) {
+    if (
+      lowerStderr.includes('port is already allocated') ||
+      lowerStderr.includes('address already in use')
+    ) {
       const portMatch = stderr.match(/(\d+)/)
       const port = portMatch ? portMatch[1] : 'unknown'
       return (
@@ -424,7 +427,11 @@ export class DockerService {
     }
 
     // Disk space
-    if (lowerStderr.includes('no space left') || lowerStderr.includes('disk') || lowerStderr.includes('storage')) {
+    if (
+      lowerStderr.includes('no space left') ||
+      lowerStderr.includes('disk') ||
+      lowerStderr.includes('storage')
+    ) {
       return (
         `Insufficient disk space (exit code ${code})\n\n` +
         `Error: ${stderr}\n\n` +

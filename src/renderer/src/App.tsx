@@ -14,9 +14,7 @@ function App() {
   return (
     <div className={`${theme} h-screen bg-background text-foreground`}>
       <Dashboard onNewProject={() => setShowNewProject(true)} />
-      {showNewProject && (
-        <NewProjectModal onClose={() => setShowNewProject(false)} />
-      )}
+      {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
     </div>
   )
 }

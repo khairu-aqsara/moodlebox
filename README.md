@@ -39,12 +39,15 @@
 **MoodleBox** is a cross-platform desktop application built with Electron that simplifies local Moodle development environments. It eliminates the complexity of manually configuring PHP, MySQL, Docker, and development tools by providing a **one-click setup** for Moodle developers.
 
 ### Problem Statement
+
 Moodle developers traditionally waste **2-4 hours** setting up local development environments, struggle with version compatibility, and frequently encounter "works on my machine" issues.
 
 ### Solution
+
 MoodleBox is a Docker-wrapper desktop application that automates environment provisioning with Moodle-specific configurations, reducing setup time from hours to **less than 5 minutes**.
 
 ### Target Audience
+
 - 🧑‍💻 **Moodle Plugin Developers** - Test plugins across multiple Moodle versions
 - 🎓 **Educators & Evaluators** - Try out Moodle features without technical knowledge
 - 🏢 **IT Administrators** - Standardize development environments across teams
@@ -57,12 +60,14 @@ MoodleBox is a Docker-wrapper desktop application that automates environment pro
 ### Core Features (MVP)
 
 #### 🚀 One-Click Project Creation
+
 - Select Moodle version from dropdown (3.11 LTS, 4.x, 5.x, daily builds)
 - Automatic PHP and MySQL version resolution based on Moodle requirements
 - Advanced mode for manual version override
 - Project provisioning completes in less than 5 minutes
 
 #### 🐳 Automated Docker Environment
+
 - **Services Included**: PHP, Apache, MySQL, phpMyAdmin
 - **Auto-Installation**: Moodle CLI install runs automatically
 - **Default Credentials**: Pre-configured admin account (`admin` / `admin`)
@@ -70,24 +75,28 @@ MoodleBox is a Docker-wrapper desktop application that automates environment pro
 - **Sample Content**: Pre-loaded example course with assignments, quizzes, and forums
 
 #### 🎨 Modern UI/UX
+
 - **Glassmorphic Design**: Premium dark/light theme support
 - **Speed Dial FAB**: Quick access to Create Project and Settings
 - **Project Cards**: Visual status indicators with real-time updates
 - **State Management**: Clear lifecycle states (Installing → Starting → Ready)
 
 #### 📊 Project Management
+
 - Create, start, stop, and delete projects with ease
 - View project status, resource usage, and uptime at a glance
 - Quick access to Moodle site, phpMyAdmin, and project directory
 - Configurable workspace folder for organized project storage
 
 #### 🔧 Smart Configuration
+
 - **Version Matrix**: Bundled `assets/versions.json` for offline support
 - **Intelligent Dependency Resolution**: Automatic PHP/DB version selection
 - **Configurable Settings**: Theme, workspace folder, phpMyAdmin port
 - **Persistent State**: Projects and settings saved with electron-store
 
 #### 🛡️ Robust Error Handling
+
 - Docker availability detection with actionable error messages
 - Download progress indicators for Moodle source files
 - Health check monitoring for containers (MySQL, Web Server)
@@ -96,18 +105,21 @@ MoodleBox is a Docker-wrapper desktop application that automates environment pro
 ### Coming Soon (Roadmap)
 
 #### Phase 2 (Advanced Development Tools)
+
 - PHP version switcher per project
 - Xdebug integration with IDE support
 - Email capture with built-in mail-catcher
 - Custom port assignment for multiple simultaneous projects
 
 #### Phase 3 (Moodle-Specific Tools)
+
 - PHPUnit & Behat automated test setup
 - Plugin generator GUI
 - Sample data generator (courses, users, activities)
 - Multi-site Moodle configurations
 
 #### Phase 4 (Collaboration & Backup)
+
 - Environment backup/restore
 - Export/share environment configurations
 - Custom project templates
@@ -119,7 +131,6 @@ MoodleBox is a Docker-wrapper desktop application that automates environment pro
 
 ![MoodleBox Screenshot](image.jpg)
 
-
 ---
 
 ## 📦 Prerequisites
@@ -127,6 +138,7 @@ MoodleBox is a Docker-wrapper desktop application that automates environment pro
 ### System Requirements
 
 **Minimum**:
+
 - **OS**: Windows 10+, macOS 10.15+, Ubuntu 18.04+
 - **CPU**: 2 cores
 - **RAM**: 4GB (8GB recommended)
@@ -179,18 +191,23 @@ npm run build:linux # Linux
 ## ⚡ Quick Start
 
 ### Step 1: Ensure Docker is Running
+
 Before launching MoodleBox, make sure Docker Desktop is running. The app will detect if Docker is unavailable and display clear instructions.
 
 ### Step 2: Launch MoodleBox
+
 Open the MoodleBox application.
 
 ### Step 3: Configure Settings (Optional)
+
 Click the **Settings** button (gear icon) in the Speed Dial FAB to:
+
 - Choose your preferred theme (dark/light)
 - Set workspace folder for project storage
 - Configure phpMyAdmin port (default: 8081)
 
 ### Step 4: Create Your First Project
+
 1. Click the **Add Project** button (+ icon) in the Speed Dial FAB
 2. Enter a project name (e.g., "My Moodle Project")
 3. Select Moodle version from dropdown (e.g., "5.1 - Development")
@@ -198,6 +215,7 @@ Click the **Settings** button (gear icon) in the Speed Dial FAB to:
 5. Click **Create Project**
 
 ### Step 5: Wait for Installation
+
 - **First Run**: Installation takes ~3-5 minutes
   - Downloads Moodle source
   - Creates Docker containers
@@ -206,13 +224,17 @@ Click the **Settings** button (gear icon) in the Speed Dial FAB to:
 - Progress bar shows real-time status
 
 ### Step 6: Open Moodle
+
 Once the project status shows **"Ready"**, click:
+
 - **Open Moodle** - Access your Moodle site at `http://localhost:{port}`
 - **Open phpMyAdmin** - Manage database at `http://localhost:8081`
 - **Open Folder** - Browse project files
 
 ### Step 7: Login
+
 Use the default credentials:
+
 - **Username**: `admin`
 - **Password**: `admin`
 
@@ -223,33 +245,37 @@ Use the default credentials:
 ### Managing Projects
 
 #### Start a Project
+
 Click the **Play** button (▶) on the project card. The status will change to "Starting" → "Ready".
 
 #### Stop a Project
+
 Click the **Stop** button (■) on the project card. The status will change to "Stopping" → "Stopped".
 
 #### Delete a Project
+
 1. Click the **Delete** button (🗑) on the project card
 2. Confirm deletion in the styled dialog
 3. All project files and Docker containers will be removed
 
 #### Open Project Resources
+
 - **Open Moodle**: Launches Moodle site in your default browser
 - **Open phpMyAdmin**: Launches database management tool in browser
 - **Open Folder**: Opens project directory in file explorer
 
 ### Project Lifecycle States
 
-| State | Description | User Action |
-|-------|-------------|-------------|
-| **Provisioning** | Creating Docker containers (first run only) | Wait |
-| **Installing** | Running Moodle installation (first run only) | Wait |
-| **Starting** | Booting up containers | Wait |
-| **Waiting** | Health checks in progress | Wait |
-| **Ready** | Fully operational | Click "Open Moodle" |
-| **Stopping** | Shutting down containers | Wait |
-| **Stopped** | Containers halted | Click "Start" to restart |
-| **Error** | Something went wrong | Check error message |
+| State            | Description                                  | User Action              |
+| ---------------- | -------------------------------------------- | ------------------------ |
+| **Provisioning** | Creating Docker containers (first run only)  | Wait                     |
+| **Installing**   | Running Moodle installation (first run only) | Wait                     |
+| **Starting**     | Booting up containers                        | Wait                     |
+| **Waiting**      | Health checks in progress                    | Wait                     |
+| **Ready**        | Fully operational                            | Click "Open Moodle"      |
+| **Stopping**     | Shutting down containers                     | Wait                     |
+| **Stopped**      | Containers halted                            | Click "Start" to restart |
+| **Error**        | Something went wrong                         | Check error message      |
 
 ### Settings Configuration
 
@@ -307,24 +333,25 @@ ezadevbox/
 
 ### Key Technologies
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Desktop Framework | Electron 38+ | Cross-platform desktop app |
-| Frontend | React 19 + TypeScript | UI components |
-| Build Tool | Vite 7 | Fast development and bundling |
-| UI Components | shadcn/ui | Pre-built accessible components |
-| Styling | Tailwind CSS 3.4 | Utility-first CSS framework |
-| State Management | Zustand | Lightweight state management |
-| Validation | Zod | Schema validation |
-| Icons | Lucide React | Icon library |
-| Docker Integration | Native Docker API | Container management |
-| Storage | electron-store | Persistent local storage |
+| Layer              | Technology            | Purpose                         |
+| ------------------ | --------------------- | ------------------------------- |
+| Desktop Framework  | Electron 38+          | Cross-platform desktop app      |
+| Frontend           | React 19 + TypeScript | UI components                   |
+| Build Tool         | Vite 7                | Fast development and bundling   |
+| UI Components      | shadcn/ui             | Pre-built accessible components |
+| Styling            | Tailwind CSS 3.4      | Utility-first CSS framework     |
+| State Management   | Zustand               | Lightweight state management    |
+| Validation         | Zod                   | Schema validation               |
+| Icons              | Lucide React          | Icon library                    |
+| Docker Integration | Native Docker API     | Container management            |
+| Storage            | electron-store        | Persistent local storage        |
 
 ---
 
 ## 🛠️ Development
 
 ### Prerequisites
+
 - Node.js 18+ (LTS recommended)
 - npm or pnpm
 - Docker Desktop running
@@ -343,16 +370,16 @@ The app will launch in development mode with hot-reload enabled.
 
 ### Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production (all platforms) |
-| `npm run build:win` | Build for Windows |
-| `npm run build:mac` | Build for macOS |
-| `npm run build:linux` | Build for Linux |
-| `npm run typecheck` | Run TypeScript type checking |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format code with Prettier |
+| Script                | Description                          |
+| --------------------- | ------------------------------------ |
+| `npm run dev`         | Start development server             |
+| `npm run build`       | Build for production (all platforms) |
+| `npm run build:win`   | Build for Windows                    |
+| `npm run build:mac`   | Build for macOS                      |
+| `npm run build:linux` | Build for Linux                      |
+| `npm run typecheck`   | Run TypeScript type checking         |
+| `npm run lint`        | Run ESLint                           |
+| `npm run format`      | Format code with Prettier            |
 
 ### Development Workflow
 
@@ -367,11 +394,13 @@ The app will launch in development mode with hot-reload enabled.
 ### Debugging
 
 #### Main Process (Electron Backend)
+
 - Use Chrome DevTools: `Menu → View → Toggle Developer Tools`
 - Add breakpoints in `src/main/` files
 - Console logs appear in terminal running `npm run dev`
 
 #### Renderer Process (React Frontend)
+
 - Use Chrome DevTools: `Menu → View → Toggle Developer Tools`
 - Use React Developer Tools browser extension
 - Console logs appear in DevTools Console
@@ -396,6 +425,7 @@ npm run build:linux
 ### Build Output
 
 Built applications are located in:
+
 - **Windows**: `out/moodlebox-{version}-setup.exe`
 - **macOS**: `out/moodlebox-{version}.dmg`
 - **Linux**: `out/moodlebox-{version}.AppImage`, `.deb`, `.snap`
@@ -411,6 +441,7 @@ Upload built files to GitHub Releases for distribution.
 ### Workspace Folder
 
 By default, projects are stored in:
+
 - **Windows**: `C:\Users\{username}\MoodleBoxProjects`
 - **macOS/Linux**: `~/MoodleBoxProjects`
 
@@ -466,6 +497,7 @@ To add a new Moodle version, update this file and rebuild the app.
 **Error**: "Docker is not running. Please start Docker Desktop and try again."
 
 **Solution**:
+
 1. Ensure Docker Desktop is installed
 2. Launch Docker Desktop and wait for it to fully start
 3. Click "Retry Connection" in MoodleBox
@@ -475,6 +507,7 @@ To add a new Moodle version, update this file and rebuild the app.
 **Error**: "Port 8080 is already in use"
 
 **Solution**:
+
 1. Stop any services using port 8080
 2. Or modify the port in `docker-compose.yml` (advanced users)
 3. Restart the project
@@ -484,6 +517,7 @@ To add a new Moodle version, update this file and rebuild the app.
 **Issue**: Project shows "Installing" for more than 10 minutes
 
 **Solution**:
+
 1. Check Docker Desktop is running properly
 2. View Docker logs: `docker logs {container-name}`
 3. Stop and recreate the project
@@ -494,6 +528,7 @@ To add a new Moodle version, update this file and rebuild the app.
 **Error**: "MySQL healthcheck failed"
 
 **Solution**:
+
 1. Ensure MySQL 8.4+ is used (check `versions.json`)
 2. Delete `mysql_data/` folder in project directory
 3. Restart project to recreate database
@@ -502,6 +537,7 @@ To add a new Moodle version, update this file and rebuild the app.
 ### Moodle Shows "Error establishing a database connection"
 
 **Solution**:
+
 1. Wait for MySQL healthcheck to pass (can take 30-60 seconds)
 2. Check `docker-compose.yml` for correct database credentials
 3. Restart the project
@@ -511,6 +547,7 @@ To add a new Moodle version, update this file and rebuild the app.
 **Issue**: Application crashes on startup
 
 **Solution**:
+
 1. Check system meets minimum requirements
 2. Update Docker Desktop to latest version
 3. Delete app data:
@@ -526,6 +563,7 @@ To add a new Moodle version, update this file and rebuild the app.
 We welcome contributions from the community! Here's how you can help:
 
 ### Reporting Bugs
+
 1. Check if the issue already exists in [GitHub Issues](https://github.com/yourusername/ezadevbox/issues)
 2. Create a new issue with:
    - Clear description of the bug
@@ -535,11 +573,13 @@ We welcome contributions from the community! Here's how you can help:
    - System information (OS, Docker version, MoodleBox version)
 
 ### Suggesting Features
+
 1. Open a [Feature Request](https://github.com/yourusername/ezadevbox/issues/new)
 2. Describe the feature and its use case
 3. Explain why it would benefit users
 
 ### Pull Requests
+
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
@@ -549,6 +589,7 @@ We welcome contributions from the community! Here's how you can help:
 7. Open a Pull Request
 
 ### Development Guidelines
+
 - Follow existing code style (use `npm run format`)
 - Add TypeScript types for new code
 - Update documentation for user-facing changes
@@ -588,6 +629,7 @@ See the [PRD.md](PRD.md) for detailed product roadmap and planned features.
 **Current Status**: MVP Development (v1.0)
 
 **Upcoming Releases**:
+
 - **v1.1**: PHP version switcher, custom ports
 - **v1.2**: Xdebug integration, email capture
 - **v2.0**: PHPUnit/Behat setup, plugin generator

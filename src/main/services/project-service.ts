@@ -2,9 +2,11 @@ import { Project, VersionsData, ProgressInfo } from '../types'
 import { promises as fs } from 'fs'
 import { DockerService } from './docker-service'
 import { ComposeGenerator } from './compose-generator'
-import { join } from 'path'
 import { BrowserWindow } from 'electron'
 import Store from 'electron-store'
+import log from 'electron-log'
+import { getAssetPath } from '../utils/asset-path'
+import { join } from 'path'
 
 interface ProjectStoreSchema {
   projects: Project[]
@@ -27,12 +29,19 @@ export class ProjectService {
   }
 
   async loadVersionsData(): Promise<void> {
-    // Use relative path from __dirname which works in both dev and production
-    // In production, assets are unpacked at app.asar.unpacked/assets maintaining the same relative structure
-    const versionsPath = join(__dirname, '../../assets/versions.json')
+    // Use standardized asset path resolution
+    const versionsPath = getAssetPath('versions.json')
 
-    const data = await fs.readFile(versionsPath, 'utf-8')
-    this.versionsData = JSON.parse(data)
+    log.info(`Loading versions from: ${versionsPath}`)
+
+    try {
+      const data = await fs.readFile(versionsPath, 'utf-8')
+      this.versionsData = JSON.parse(data)
+      log.info(`Successfully loaded ${this.versionsData?.releases?.length || 0} Moodle versions`)
+    } catch (error) {
+      log.error(`Failed to load versions.json from ${versionsPath}:`, error)
+      throw error
+    }
   }
 
   /**
@@ -105,7 +114,7 @@ export class ProjectService {
 
   getProject(id: string): Project | undefined {
     const projects = this.getAllProjects()
-    return projects.find(p => p.id === id)
+    return projects.find((p) => p.id === id)
   }
 
   async createProject(project: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
@@ -121,7 +130,7 @@ export class ProjectService {
     await fs.mkdir(project.path, { recursive: true })
 
     // Get version data
-    const version = this.versionsData?.releases.find(r => r.version === project.moodleVersion)
+    const version = this.versionsData?.releases.find((r) => r.version === project.moodleVersion)
     if (!version) {
       throw new Error(`Version ${project.moodleVersion} not found`)
     }
@@ -139,14 +148,12 @@ export class ProjectService {
 
   updateProject(id: string, updates: Partial<Project>): void {
     const projects = this.getAllProjects()
-    const updatedProjects = projects.map(p =>
-      p.id === id ? { ...p, ...updates } : p
-    )
+    const updatedProjects = projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
     this.store.set('projects', updatedProjects)
 
     // Notify renderer of project update
     const allWindows = BrowserWindow.getAllWindows()
-    allWindows.forEach(window => {
+    allWindows.forEach((window) => {
       window.webContents.send('project:updated', { id, updates })
     })
   }
@@ -179,7 +186,10 @@ export class ProjectService {
 
     // Remove from database
     const projects = this.getAllProjects()
-    this.store.set('projects', projects.filter(p => p.id !== id))
+    this.store.set(
+      'projects',
+      projects.filter((p) => p.id !== id)
+    )
   }
 
   async startProject(id: string, onLog?: (log: string) => void): Promise<void> {
@@ -187,7 +197,7 @@ export class ProjectService {
     if (!project) throw new Error('Project not found')
 
     // Get version data for download URL
-    const version = this.versionsData?.releases.find(r => r.version === project.moodleVersion)
+    const version = this.versionsData?.releases.find((r) => r.version === project.moodleVersion)
     if (!version) {
       throw new Error(`Version ${project.moodleVersion} not found`)
     }
@@ -234,17 +244,11 @@ export class ProjectService {
         this.updateProject(id, updates)
       }
 
-    // Use lifecycle manager for complete workflow
-    const { LifecycleManager } = await import('./lifecycle-manager')
-    const lifecycleManager = new LifecycleManager()
-    
-      await lifecycleManager.startProject(
-        project,
-        version.download,
-        version,
-        onStatusUpdate,
-        onLog
-      )
+      // Use lifecycle manager for complete workflow
+      const { LifecycleManager } = await import('./lifecycle-manager')
+      const lifecycleManager = new LifecycleManager()
+
+      await lifecycleManager.startProject(project, version.download, version, onStatusUpdate, onLog)
     } catch (err: any) {
       // Error already handled by lifecycle manager, but ensure state is updated
       onLog?.(`❌ Failed to start project: ${err?.message || err}`)
@@ -260,7 +264,7 @@ export class ProjectService {
 
     const { LifecycleManager } = await import('./lifecycle-manager')
     const lifecycleManager = new LifecycleManager()
-    
+
     await lifecycleManager.stopProject(project)
     this.updateProject(id, { status: 'stopped' })
   }
