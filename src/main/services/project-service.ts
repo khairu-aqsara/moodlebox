@@ -160,15 +160,110 @@ export class ProjectService {
   }
 
   async createProject(project: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
+    // Check for existing project with same name/path
+    const existingProjects = this.getAllProjects()
+    const duplicatePath = existingProjects.find((p) => p.path === project.path)
+    if (duplicatePath) {
+      throw new Error(
+        `A project already exists at "${project.path}".\n\n` +
+          `Please choose a different project name or delete the existing project first.`
+      )
+    }
+
+    // Check for port conflicts with existing projects
+    const portConflict = existingProjects.find((p) => p.port === project.port)
+    if (portConflict) {
+      throw new Error(
+        `Port ${project.port} is already in use by project "${portConflict.name}".\n\n` +
+          `Please choose a different port (e.g., ${project.port + 1}) or stop/delete the existing project.`
+      )
+    }
+
+    // Check if port is available on the system
+    const portAvailable = await this.dockerService.checkPort(project.port)
+    if (!portAvailable) {
+      throw new Error(
+        `Port ${project.port} is already in use by another application.\n\n` +
+          `Please choose a different port or stop the application using port ${project.port}.`
+      )
+    }
+
+    // Generate random port for database (10000-60000) and ensure it's unique
+    let dbPort = Math.floor(Math.random() * (60000 - 10000 + 1) + 10000)
+    let attempts = 0
+    while (existingProjects.some((p) => p.dbPort === dbPort) && attempts < 10) {
+      dbPort = Math.floor(Math.random() * (60000 - 10000 + 1) + 10000)
+      attempts++
+    }
+
+    // Check if database port is available on the system
+    const dbPortAvailable = await this.dockerService.checkPort(dbPort)
+    if (!dbPortAvailable) {
+      // Try a few more times to find an available port
+      for (let i = 0; i < 10; i++) {
+        dbPort = Math.floor(Math.random() * (60000 - 10000 + 1) + 10000)
+        const available = await this.dockerService.checkPort(dbPort)
+        if (available && !existingProjects.some((p) => p.dbPort === dbPort)) {
+          break
+        }
+      }
+      // Final check - if still not available, warn but continue (Docker will handle it)
+      const finalCheck = await this.dockerService.checkPort(dbPort)
+      if (!finalCheck) {
+        log.warn(`Database port ${dbPort} may be in use, but continuing with project creation`)
+      }
+    }
+
     const newProject: Project = {
       ...project,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      // Generate random port for database (10000-60000)
-      dbPort: Math.floor(Math.random() * (60000 - 10000 + 1) + 10000)
+      dbPort
     }
 
-    // Create project directory
+    // Check if project directory already exists and has containers
+    // This handles the case where a previous project creation failed but containers were created
+    const dockerAvailable = await this.dockerService.checkDockerInstalled()
+    if (dockerAvailable) {
+      try {
+        // Check if project directory exists
+        const dirExists = await fs.access(project.path).then(() => true).catch(() => false)
+        
+        if (dirExists) {
+          // Check if docker-compose.yml exists (indicates containers might exist)
+          const composePath = join(project.path, 'docker-compose.yml')
+          const composeExists = await fs.access(composePath).then(() => true).catch(() => false)
+          
+          if (composeExists) {
+            // Check if containers actually exist
+            const containerStatus = await this.dockerService.getProjectContainerStatus(project.path)
+            if (containerStatus.containerCount > 0) {
+              throw new Error(
+                `Docker containers already exist for this project path.\n\n` +
+                  `Found ${containerStatus.containerCount} container(s) at "${project.path}".\n\n` +
+                  `This usually means:\n` +
+                  `- A previous project creation was interrupted\n` +
+                  `- Containers were created manually\n` +
+                  `- Another project is using this path\n\n` +
+                  `Please either:\n` +
+                  `1. Choose a different project name/path\n` +
+                  `2. Delete the existing containers manually: docker compose down -v\n` +
+                  `3. Delete the project folder and try again`
+              )
+            }
+          }
+        }
+      } catch (error: any) {
+        // If error is our custom error, re-throw it
+        if (error.message?.includes('Docker containers already exist')) {
+          throw error
+        }
+        // Otherwise, log and continue (might be a permission issue or Docker not accessible)
+        log.warn(`Could not check for existing containers: ${error.message}`)
+      }
+    }
+
+    // Create project directory (will not fail if it already exists due to recursive: true)
     await fs.mkdir(project.path, { recursive: true })
 
     // Get version data
