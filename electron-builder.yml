@@ -83,8 +83,10 @@ mac:
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
-  # Sign DMG if CSC_NAME is set, otherwise unsigned
-  sign: ${env.CSC_NAME}
+  # DMG signing (set to true when CSC_NAME is set for code signing)
+  # electron-builder will automatically sign the app when CSC_NAME is set
+  # This controls DMG container signing separately (usually not needed)
+  sign: false
 
 # ===== Windows Configuration =====
 win:
@@ -98,9 +100,10 @@ win:
   # Set CSC_LINK to path of .pfx certificate file, or CSC_NAME for certificate store
   # Set CSC_KEY_PASSWORD if certificate is password-protected
   # If not set, builds will be unsigned (works for CI/CD)
+  # electron-builder will automatically sign when CSC_LINK or CSC_NAME is set
   certificateFile: ${env.CSC_LINK}
   certificatePassword: ${env.CSC_KEY_PASSWORD}
-  sign: ${env.CSC_LINK}
+  sign: null
 
 nsis:
   artifactName: ${name}-${version}-${arch}-setup.${ext}
