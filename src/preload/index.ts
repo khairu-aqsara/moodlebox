@@ -1,12 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
+export interface AppSettings {
+  theme: 'light' | 'dark'
+  workspaceFolder: string
+  phpMyAdminPort: number
+}
+
 export interface Project {
   id: string
   name: string
   moodleVersion: string
   port: number
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'error'
+  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
   path: string
   createdAt: string
   lastUsed?: string
@@ -27,7 +33,7 @@ export interface ProgressInfo {
 const api = {
   projects: {
     getAll: () => ipcRenderer.invoke('projects:getAll'),
-    create: (project: any) => ipcRenderer.invoke('projects:create', project),
+    create: (project: Omit<Project, 'id' | 'createdAt'>) => ipcRenderer.invoke('projects:create', project),
     start: (id: string) => ipcRenderer.invoke('projects:start', id),
     stop: (id: string) => ipcRenderer.invoke('projects:stop', id),
     delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
@@ -35,16 +41,31 @@ const api = {
     openBrowser: (port: number) => ipcRenderer.invoke('projects:openBrowser', port),
     getDefaultPath: () => ipcRenderer.invoke('projects:getDefaultPath'),
     onLog: (callback: (data: { id: string; log: string }) => void) => {
-      ipcRenderer.on('project:log', (_, data) => callback(data))
+      const handler = (_: unknown, data: { id: string; log: string }) => callback(data)
+      ipcRenderer.on('project:log', handler)
+      // Return cleanup function
+      return () => {
+        ipcRenderer.removeListener('project:log', handler)
+      }
     },
     onProjectUpdate: (callback: (data: { id: string; updates: Partial<Project> }) => void) => {
-      ipcRenderer.on('project:updated', (_, data) => callback(data))
+      const handler = (_: unknown, data: { id: string; updates: Partial<Project> }) => callback(data)
+      ipcRenderer.on('project:updated', handler)
+      // Return cleanup function
+      return () => {
+        ipcRenderer.removeListener('project:updated', handler)
+      }
     },
-    checkDocker: () => ipcRenderer.invoke('projects:checkDocker')
+    checkDocker: () => ipcRenderer.invoke('projects:checkDocker'),
+    syncStates: () => ipcRenderer.invoke('projects:syncStates')
+  },
+  app: {
+    getLogPath: () => ipcRenderer.invoke('app:getLogPath'),
+    openLogFolder: () => ipcRenderer.invoke('app:openLogFolder')
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
-    update: (settings: any) => ipcRenderer.invoke('settings:update', settings),
+    update: (settings: Partial<AppSettings>) => ipcRenderer.invoke('settings:update', settings),
     selectFolder: () => ipcRenderer.invoke('settings:selectFolder')
   }
 }
@@ -57,7 +78,9 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
-    console.error(error)
+    // Error during context bridge setup - this is a critical error
+    // In production, this would be logged by electron-log if available
+    // In preload, we can't use electron-log, so we rely on Electron's error handling
   }
 } else {
   // @ts-ignore (define in dts)

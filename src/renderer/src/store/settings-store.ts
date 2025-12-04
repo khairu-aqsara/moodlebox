@@ -27,7 +27,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         phpMyAdminPort: settings.phpMyAdminPort
       })
     } catch (error) {
-      console.error('Failed to load settings:', error)
+      // Settings loading failed - use defaults
+      // In production, consider showing a toast notification
     } finally {
       set({ isLoading: false })
     }
@@ -48,8 +49,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         phpMyAdminPort: saved.phpMyAdminPort
       })
     } catch (error) {
-      console.error('Failed to update settings:', error)
-      // Revert on error
+      // Settings update failed - revert to previous state
+      // In production, consider showing a toast notification
       set(current)
     }
   },
@@ -61,7 +62,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         await get().updateSettings({ workspaceFolder: folder })
       }
     } catch (error) {
-      console.error('Failed to select folder:', error)
+      // Folder selection cancelled or failed - silently ignore
+      // User can try again if needed
     }
   }
 }))

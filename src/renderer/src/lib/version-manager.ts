@@ -9,8 +9,9 @@ class VersionManager {
     const result = VersionsDataSchema.safeParse(versionsData)
 
     if (!result.success) {
-      console.error('Invalid versions.json format:', result.error)
-      throw new Error('Failed to load versions.json')
+      // Invalid versions.json - this is a critical error
+      // Throw error to prevent app from running with invalid data
+      throw new Error(`Failed to load versions.json: ${result.error.message}`)
     }
 
     this.data = result.data

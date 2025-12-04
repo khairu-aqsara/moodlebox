@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { basename } from 'path'
+import log from 'electron-log'
 
 export interface DockerCommand {
   cwd: string
@@ -74,19 +75,51 @@ export class DockerService {
       })
 
       let output = ''
+      let stderr = ''
+
       proc.stdout?.on('data', (data) => {
         output += data.toString()
       })
 
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString()
+      })
+
       proc.on('close', (code) => {
         if (code !== 0) {
+          log.debug(`docker compose ps failed with code ${code} in ${projectPath}, stderr: ${stderr}`)
+          resolve({ running: false, healthy: false, containerCount: 0 })
+          return
+        }
+
+        // Handle empty output (no containers)
+        const trimmedOutput = output.trim()
+        if (!trimmedOutput) {
+          log.debug(`docker compose ps returned empty output for ${projectPath}`)
           resolve({ running: false, healthy: false, containerCount: 0 })
           return
         }
 
         try {
-          const parsed = JSON.parse(output)
-          const containers = Array.isArray(parsed) ? parsed : [parsed]
+          // docker compose ps --format json returns one JSON object per line
+          // Parse each line as a separate JSON object
+          const lines = trimmedOutput.split('\n').filter((line) => line.trim())
+          const containers: any[] = []
+
+          for (const line of lines) {
+            try {
+              const container = JSON.parse(line.trim())
+              containers.push(container)
+            } catch (parseError) {
+              log.debug(`Failed to parse container line: ${line}`, parseError)
+            }
+          }
+
+          if (containers.length === 0) {
+            log.debug(`No containers parsed from output: ${trimmedOutput}`)
+            resolve({ running: false, healthy: false, containerCount: 0 })
+            return
+          }
 
           const runningContainers = containers.filter((c: any) => c.State === 'running')
           const allHealthy = containers.every((c: any) => {
@@ -96,17 +129,26 @@ export class DockerService {
             return c.State === 'running'
           })
 
+          log.debug(
+            `Container status for ${projectPath}: ${runningContainers.length}/${containers.length} running, healthy: ${allHealthy}`
+          )
+
           resolve({
             running: runningContainers.length > 0,
             healthy: allHealthy && runningContainers.length > 0,
             containerCount: containers.length
           })
-        } catch {
+        } catch (error) {
+          log.error(`Error parsing docker compose ps output for ${projectPath}:`, error)
+          log.debug(`Output was: ${output}`)
           resolve({ running: false, healthy: false, containerCount: 0 })
         }
       })
 
-      proc.on('error', () => resolve({ running: false, healthy: false, containerCount: 0 }))
+      proc.on('error', (err) => {
+        log.error(`Error running docker compose ps for ${projectPath}:`, err)
+        resolve({ running: false, healthy: false, containerCount: 0 })
+      })
     })
   }
 
@@ -153,38 +195,48 @@ export class DockerService {
   async waitForHealthy(containerName: string, cwd: string, timeoutMs = 120000): Promise<void> {
     const startTime = Date.now()
     let lastStatus = 'unknown'
+    let checkInterval: NodeJS.Timeout | null = null
 
-    while (Date.now() - startTime < timeoutMs) {
-      try {
-        const isHealthy = await this.checkContainerHealth(containerName, cwd)
-        if (isHealthy) {
-          return
-        }
-
-        // Get current status for better error reporting
+    try {
+      while (Date.now() - startTime < timeoutMs) {
         try {
-          const statusResult = await this.getContainerStatus(containerName, cwd)
-          lastStatus = statusResult
+          const isHealthy = await this.checkContainerHealth(containerName, cwd)
+          if (isHealthy) {
+            return
+          }
+
+          // Get current status for better error reporting
+          try {
+            const statusResult = await this.getContainerStatus(containerName, cwd)
+            lastStatus = statusResult
+          } catch {
+            // Ignore status check errors
+          }
         } catch {
-          // Ignore status check errors
+          // Container might not be running yet
         }
-      } catch {
-        // Container might not be running yet
+
+        // Wait 3 seconds before next check
+        await new Promise<void>((resolve) => {
+          checkInterval = setTimeout(() => resolve(), 3000)
+        })
       }
 
-      // Wait 3 seconds before next check
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      throw new Error(
+        `Timeout waiting for ${containerName} to be healthy after ${timeoutMs / 1000} seconds\n\n` +
+          `Last known status: ${lastStatus}\n\n` +
+          `Troubleshooting:\n` +
+          `1. Check container logs: docker compose logs ${containerName}\n` +
+          `2. Check container status: docker compose ps\n` +
+          `3. The container may need more time to initialize\n` +
+          `4. Check if the container is stuck: docker compose exec ${containerName} ps aux`
+      )
+    } finally {
+      // Clean up any pending interval
+      if (checkInterval) {
+        clearTimeout(checkInterval)
+      }
     }
-
-    throw new Error(
-      `Timeout waiting for ${containerName} to be healthy after ${timeoutMs / 1000} seconds\n\n` +
-        `Last known status: ${lastStatus}\n\n` +
-        `Troubleshooting:\n` +
-        `1. Check container logs: docker compose logs ${containerName}\n` +
-        `2. Check container status: docker compose ps\n` +
-        `3. The container may need more time to initialize\n` +
-        `4. Check if the container is stuck: docker compose exec ${containerName} ps aux`
-    )
   }
 
   /**
@@ -282,7 +334,7 @@ export class DockerService {
             resolve(true)
           }
         } catch (error) {
-          console.error('Error parsing container state:', error, 'Output:', output)
+          log.debug('Error parsing container state:', error, 'Output:', output)
           resolve(false)
         }
       })

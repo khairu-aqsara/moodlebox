@@ -19,12 +19,15 @@ export function Dashboard({ onNewProject }: DashboardProps) {
   const [showSettings, setShowSettings] = useState(false)
 
   const checkDocker = async () => {
+    // Prevent multiple simultaneous checks
+    if (isCheckingDocker) return
+
     setIsCheckingDocker(true)
     try {
       const isRunning = await window.api.projects.checkDocker()
       setDockerError(!isRunning)
     } catch (err) {
-      console.error('Failed to check Docker:', err)
+      // Docker check failed - assume Docker is not available
       setDockerError(true)
     } finally {
       setIsCheckingDocker(false)
@@ -35,10 +38,38 @@ export function Dashboard({ onNewProject }: DashboardProps) {
     loadProjects()
     checkDocker()
 
-    // Re-check when window gains focus
-    const onFocus = () => checkDocker()
+    // Sync project states when window gains focus
+    // This handles the case where Docker was started after app launch
+    // or containers were started/stopped outside the app
+    const syncOnFocus = async () => {
+      try {
+        await window.api.projects.syncStates()
+        await loadProjects() // Reload to get updated states
+      } catch (err) {
+        // Silently fail - sync happens on startup anyway
+      }
+    }
+
+    // Debounce Docker check and sync on focus to avoid excessive checks
+    let focusTimeout: NodeJS.Timeout | null = null
+    const onFocus = () => {
+      if (focusTimeout) {
+        clearTimeout(focusTimeout)
+      }
+      focusTimeout = setTimeout(() => {
+        checkDocker()
+        syncOnFocus()
+      }, 500) // Debounce by 500ms
+    }
+
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      if (focusTimeout) {
+        clearTimeout(focusTimeout)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const toggleFab = () => setIsFabOpen(!isFabOpen)
