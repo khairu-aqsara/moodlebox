@@ -9,3 +9,8 @@ PRD.md
 BUILD_GUIDE.md
 CLAUDE.md
 build/icons/
+
+# Environment variables (may contain sensitive signing credentials)
+.env
+.env.local
+.env.*.local

@@ -59,8 +59,10 @@ mac:
       arch: [x64, arm64] # Intel and Apple Silicon
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  hardenedRuntime: false
-  gatekeeperAssess: false
+  # Enable hardened runtime and gatekeeper when signing (required for notarization)
+  # These are safe to enable even for unsigned builds
+  hardenedRuntime: true
+  gatekeeperAssess: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -68,13 +70,21 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  # Unsigned build - no code signing
-  identity: null
-  notarize: false
+  # Code signing configuration (optional via environment variables)
+  # Set CSC_NAME to enable signing: export CSC_NAME="Developer ID Application: Your Name (TEAM_ID)"
+  # If not set, builds will be unsigned (works for CI/CD)
+  identity: ${env.CSC_NAME}
+  # Notarization (optional, requires Apple Developer account)
+  # Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID environment variables to enable
+  # electron-builder will automatically enable notarization when APPLE_TEAM_ID is set
+  # If not set, notarization is skipped (works for CI/CD)
+  notarize:
+    teamId: ${env.APPLE_TEAM_ID}
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
-  sign: false
+  # Sign DMG if CSC_NAME is set, otherwise unsigned
+  sign: ${env.CSC_NAME}
 
 # ===== Windows Configuration =====
 win:
@@ -84,9 +94,13 @@ win:
   icon: build/icon.ico
   executableName: MoodleBox
   publisherName: MoodleBox Team
-  # Unsigned build - no code signing
-  certificateFile: null
-  sign: null
+  # Code signing configuration (optional via environment variables)
+  # Set CSC_LINK to path of .pfx certificate file, or CSC_NAME for certificate store
+  # Set CSC_KEY_PASSWORD if certificate is password-protected
+  # If not set, builds will be unsigned (works for CI/CD)
+  certificateFile: ${env.CSC_LINK}
+  certificatePassword: ${env.CSC_KEY_PASSWORD}
+  sign: ${env.CSC_LINK}
 
 nsis:
   artifactName: ${name}-${version}-${arch}-setup.${ext}
