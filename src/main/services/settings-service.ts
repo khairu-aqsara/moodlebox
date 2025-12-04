@@ -24,7 +24,7 @@ export class SettingsService {
   private ensureStoreInitialized() {
     if (!this.initialized) {
       const defaultWorkspaceFolder = join(app.getPath('documents'), 'MoodleBox')
-      
+
       this.store = new Store<SettingsStoreSchema>({
         defaults: {
           settings: {

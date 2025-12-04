@@ -8,15 +8,15 @@ export const MoodleVersionSchema = z.object({
     php: z.string(),
     mariadb: z.string().optional(),
     mysql: z.string().optional(),
-    postgres: z.string(),
+    postgres: z.string()
   }),
   webroot: z.string().optional(),
-  composer: z.boolean().optional(),
+  composer: z.boolean().optional()
 })
 
 export const VersionsDataSchema = z.object({
   latest_update: z.string(),
-  releases: z.array(MoodleVersionSchema),
+  releases: z.array(MoodleVersionSchema)
 })
 
 export type MoodleVersion = z.infer<typeof MoodleVersionSchema>
@@ -27,7 +27,16 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
+  status:
+    | 'provisioning'
+    | 'installing'
+    | 'starting'
+    | 'waiting'
+    | 'ready'
+    | 'stopped'
+    | 'stopping'
+    | 'deleting'
+    | 'error'
   path: string
   createdAt: string
   lastUsed?: string

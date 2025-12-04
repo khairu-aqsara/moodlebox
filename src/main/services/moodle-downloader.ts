@@ -35,12 +35,12 @@ export class MoodleDownloader {
         if (!response.ok) {
           throw new Error(
             `Failed to download Moodle: ${response.status} ${response.statusText}\n\n` +
-            `URL: ${url}\n\n` +
-            `This could mean:\n` +
-            `- Network connection issue\n` +
-            `- GitHub rate limiting (try again in a few minutes)\n` +
-            `- Invalid Moodle version URL\n\n` +
-            `Please check your internet connection and try again.`
+              `URL: ${url}\n\n` +
+              `This could mean:\n` +
+              `- Network connection issue\n` +
+              `- GitHub rate limiting (try again in a few minutes)\n` +
+              `- Invalid Moodle version URL\n\n` +
+              `Please check your internet connection and try again.`
           )
         }
 
@@ -119,17 +119,19 @@ export class MoodleDownloader {
 
       // Enhance error message
       if (error.name === 'AbortError') {
-        throw new Error('Download timed out after 5 minutes. Please check your internet connection.')
+        throw new Error(
+          'Download timed out after 5 minutes. Please check your internet connection.'
+        )
       } else if (error.message?.includes('Failed to download')) {
         throw error
       } else {
         throw new Error(
           `Download or extraction failed: ${error.message}\n\n` +
-          `Possible causes:\n` +
-          `- Network interruption during download\n` +
-          `- Insufficient disk space\n` +
-          `- File permissions issue\n\n` +
-          `Original error: ${error.message}`
+            `Possible causes:\n` +
+            `- Network interruption during download\n` +
+            `- Insufficient disk space\n` +
+            `- File permissions issue\n\n` +
+            `Original error: ${error.message}`
         )
       }
     }
@@ -163,7 +165,7 @@ export class MoodleDownloader {
       } catch (error: any) {
         if (i === retries - 1) throw error
         // Wait a bit before retrying (Windows file locking)
-        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)))
+        await new Promise((resolve) => setTimeout(resolve, 100 * (i + 1)))
       }
     }
   }

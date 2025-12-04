@@ -35,11 +35,12 @@ export class MoodleInstaller {
     configContent = configContent.replace('http://localhost:8080', `http://localhost:${port}`)
 
     // Database settings - need to match docker-compose
+    // IMPORTANT: Moodle runs in 'moodle' container, so it connects to MySQL using service name 'db'
     configContent = configContent.replace(
       /\$CFG->dbtype\s*=\s*'[^']+';/,
       "$CFG->dbtype    = 'mysqli';"
     )
-    configContent = configContent.replace(/\$CFG->dbhost\s*=\s*'[^']+';/, "$CFG->dbhost    = 'db';")
+    configContent = configContent.replace(/\$CFG->dbhost\s*=\s*'[^']+';/, "$CFG->dbhost    = 'db';") // Service name for inter-container communication
     configContent = configContent.replace(
       /\$CFG->dbuser\s*=\s*'[^']+';/,
       "$CFG->dbuser    = 'moodle';"
@@ -119,10 +120,14 @@ export class MoodleInstaller {
     const dbPassword = passwordMatch ? passwordMatch[1] : 'moodle'
 
     // Drop and recreate the database using mysql command
+    // IMPORTANT: We execute mysql INSIDE the db container (docker compose exec db mysql),
+    // so we use 'localhost' because MySQL is running in the same container.
+    // This is different from Moodle's config.php which uses 'db' (service name) because
+    // Moodle runs in a different container and connects via Docker network.
     const dropCommand = [
       'mysql',
       '-h',
-      'db', // Use service name instead of host IP
+      'localhost', // MySQL is in the same container, so use localhost
       '-u',
       'root',
       '-e',
@@ -278,50 +283,72 @@ export class MoodleInstaller {
   async isInstalled(projectPath: string): Promise<boolean> {
     return new Promise((resolve) => {
       // Check if mdl_config table exists in the database
-      const composeContent = require('fs').readFileSync(
-        require('path').join(projectPath, 'docker-compose.yml'),
-        'utf-8'
-      )
-      const passwordMatch = composeContent.match(/MYSQL_PASSWORD[=:]\s*['"]?([^'"\s]+)['"]?/)
-      const dbPassword = passwordMatch ? passwordMatch[1] : 'moodle'
+      fs.readFile(join(projectPath, 'docker-compose.yml'), 'utf-8')
+        .then((composeContent) => {
+          const passwordMatch = composeContent.match(/MYSQL_PASSWORD[=:]\s*['"]?([^'"\s]+)['"]?/)
+          const dbPassword = passwordMatch ? passwordMatch[1] : 'moodle'
 
-      const args = [
-        'compose',
-        'exec',
-        '-T',
-        '-e',
-        `MYSQL_PWD=${dbPassword}`,
-        'db',
-        'mysql',
-        '-h',
-        'db', // Use service name instead of host IP
-        '-u',
-        'moodle',
-        'moodle',
-        '-e',
-        'SELECT COUNT(*) FROM mdl_config;'
-      ]
+          // IMPORTANT: We execute mysql INSIDE the db container (docker compose exec db mysql),
+          // so we use 'localhost' because MySQL is running in the same container.
+          // This is different from Moodle's config.php which uses 'db' (service name) because
+          // Moodle runs in a different container and connects via Docker network.
+          // Using localhost is more reliable cross-platform (especially on Windows).
+          const args = [
+            'compose',
+            'exec',
+            '-T',
+            '-e',
+            `MYSQL_PWD=${dbPassword}`,
+            'db',
+            'mysql',
+            '-h',
+            'localhost', // MySQL is in the same container, so use localhost
+            '-u',
+            'moodle',
+            'moodle',
+            '-e',
+            'SELECT COUNT(*) FROM mdl_config;'
+          ]
 
-      const proc = spawn('docker', args, {
-        cwd: projectPath,
-        windowsHide: true
-      })
+          const proc = spawn('docker', args, {
+            cwd: projectPath,
+            windowsHide: true,
+            env: { ...process.env, MYSQL_PWD: dbPassword } // Also set in env for cross-platform compatibility
+          })
 
-      let output = ''
-      proc.stdout?.on('data', (data) => {
-        output += data.toString()
-      })
+          let output = ''
+          let errorOutput = ''
 
-      proc.on('close', (code) => {
-        // If query succeeds, database tables exist (installed)
-        // If it fails, tables don't exist (not installed)
-        resolve(code === 0 && output.includes('COUNT'))
-      })
+          proc.stdout?.on('data', (data) => {
+            output += data.toString()
+          })
 
-      proc.on('error', () => {
-        // If command fails, assume not installed
-        resolve(false)
-      })
+          proc.stderr?.on('data', (data) => {
+            errorOutput += data.toString()
+          })
+
+          proc.on('close', (code) => {
+            // If query succeeds, database tables exist (installed)
+            // If it fails, tables don't exist (not installed)
+            if (code === 0 && output.includes('COUNT')) {
+              resolve(true)
+            } else {
+              // Log error for debugging but don't fail - assume not installed
+              log.debug(`isInstalled check failed: code=${code}, output=${output}, error=${errorOutput}`)
+              resolve(false)
+            }
+          })
+
+          proc.on('error', (err) => {
+            log.debug(`isInstalled command error: ${err.message}`)
+            // If command fails, assume not installed
+            resolve(false)
+          })
+        })
+        .catch((err) => {
+          log.error(`Failed to read docker-compose.yml: ${err.message}`)
+          resolve(false)
+        })
     })
   }
 
@@ -341,9 +368,18 @@ export class MoodleInstaller {
         ...options.command
       ]
 
+      // Merge environment variables for cross-platform compatibility
+      // On Windows, environment variables need to be properly passed
+      const env = {
+        ...process.env,
+        ...(options.env || {})
+      }
+
       const proc = spawn('docker', args, {
         cwd: options.cwd,
-        windowsHide: true
+        windowsHide: true,
+        env,
+        shell: false // Explicitly disable shell to avoid Windows path issues
       })
 
       let stdout = ''

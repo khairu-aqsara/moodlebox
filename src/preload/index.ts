@@ -27,8 +27,7 @@ export interface ProgressInfo {
 const api = {
   projects: {
     getAll: () => ipcRenderer.invoke('projects:getAll'),
-    create: (project: any) =>
-      ipcRenderer.invoke('projects:create', project),
+    create: (project: any) => ipcRenderer.invoke('projects:create', project),
     start: (id: string) => ipcRenderer.invoke('projects:start', id),
     stop: (id: string) => ipcRenderer.invoke('projects:stop', id),
     delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
