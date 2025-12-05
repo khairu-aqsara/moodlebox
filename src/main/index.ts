@@ -78,6 +78,9 @@ if (process.platform === 'darwin' && app.isPackaged) {
 const projectService = new ProjectService()
 const settingsService = new SettingsService()
 
+// Store reference to main window for proper restoration
+let mainWindow: BrowserWindow | null = null
+
 // Verify assets are accessible on startup
 verifyAssets()
   .then((success) => {
@@ -89,12 +92,16 @@ verifyAssets()
     log.error('Error during asset verification:', error)
   })
 
-function createWindow(): void {
-  const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+import { WINDOW } from './constants'
+
+function createWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    width: WINDOW.DEFAULT_WIDTH,
+    height: WINDOW.DEFAULT_HEIGHT,
+    minWidth: WINDOW.MIN_WIDTH,
+    minHeight: WINDOW.MIN_HEIGHT,
     show: false,
-    resizable: false,
+    resizable: true,
     title: 'MoodleBox',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -104,20 +111,27 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  window.on('ready-to-show', () => {
+    window.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  // Handle window close - set to null when destroyed
+  window.on('closed', () => {
+    mainWindow = null
+  })
+
+  window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    window.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    window.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return window
 }
 
 // IPC Handlers
@@ -149,6 +163,11 @@ function setupIPCHandlers() {
     await projectService.deleteProject(id)
   })
 
+  // Duplicate project
+  ipcMain.handle('projects:duplicate', async (_, id: string, newName: string, newPort: number) => {
+    return await projectService.duplicateProject(id, newName, newPort)
+  })
+
   // Open project folder
   ipcMain.handle('projects:openFolder', (_, path: string) => {
     shell.openPath(path)
@@ -174,6 +193,11 @@ function setupIPCHandlers() {
     await projectService.syncProjectStates()
   })
 
+  // Get project logs
+  ipcMain.handle('projects:getLogs', async (_, id: string) => {
+    return await projectService.getProjectLogs(id)
+  })
+
   // Get log file path (for debugging/support)
   ipcMain.handle('app:getLogPath', () => {
     return log.transports.file.getFile().path
@@ -182,8 +206,8 @@ function setupIPCHandlers() {
   // Open log file location in file manager
   ipcMain.handle('app:openLogFolder', () => {
     const logPath = log.transports.file.getFile().path
-    const path = require('path')
-    const logDir = path.dirname(logPath)
+    const { dirname } = require('path')
+    const logDir = dirname(logPath)
     shell.openPath(logDir)
   })
 
@@ -255,18 +279,33 @@ app.whenReady().then(async () => {
 
     // Sync project states with Docker reality
     // This ensures the database reflects reality on app startup
+    // Use force=true to bypass debounce on startup
     log.info('Syncing project states...')
-    await projectService.syncProjectStates()
+    await projectService.syncProjectStates(true)
     log.info('Project states synced')
 
     setupIPCHandlers()
 
     log.info('Creating window...')
-    createWindow()
+    mainWindow = createWindow()
     log.info('Window created successfully')
 
+    // Handle app activation (e.g., clicking dock icon on macOS)
     app.on('activate', function () {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      // On macOS, re-create window if none exist
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow()
+      } else if (mainWindow) {
+        // If window exists but is minimized or hidden, restore it
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore()
+        }
+        if (!mainWindow.isVisible()) {
+          mainWindow.show()
+        }
+        // Bring window to front
+        mainWindow.focus()
+      }
     })
   } catch (error) {
     log.error('Critical error during app initialization:', error)

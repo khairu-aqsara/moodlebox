@@ -498,9 +498,11 @@ To add a new Moodle version, update this file and rebuild the app.
 
 **Solution**:
 
-1. Ensure Docker Desktop is installed
-2. Launch Docker Desktop and wait for it to fully start
-3. Click "Retry Connection" in MoodleBox
+1. Ensure Docker Desktop is installed from [docker.com](https://docker.com)
+2. Launch Docker Desktop and wait for it to fully start (check system tray/menu bar)
+3. Verify Docker is running: Open terminal and run `docker info`
+4. Click "Retry Connection" in MoodleBox
+5. On Linux, ensure Docker service is running: `sudo systemctl start docker`
 
 ### Port Already in Use
 
@@ -508,9 +510,12 @@ To add a new Moodle version, update this file and rebuild the app.
 
 **Solution**:
 
-1. Stop any services using port 8080
-2. Or modify the port in `docker-compose.yml` (advanced users)
-3. Restart the project
+1. **Find what's using the port**:
+   - **macOS/Linux**: `lsof -i :8080` or `netstat -an | grep 8080`
+   - **Windows**: `netstat -ano | findstr :8080`
+2. Stop the conflicting service or choose a different port
+3. When creating a project, use a port like 8082, 8083, etc.
+4. Ports below 1024 require root privileges - use ports 1024-65535
 
 ### Project Stuck in "Installing" State
 
@@ -518,43 +523,244 @@ To add a new Moodle version, update this file and rebuild the app.
 
 **Solution**:
 
-1. Check Docker Desktop is running properly
-2. View Docker logs: `docker logs {container-name}`
-3. Stop and recreate the project
-4. Check disk space (projects require 2-3GB each)
+1. **Check Docker Desktop** is running properly and has sufficient resources
+2. **View project logs**: Click "View Logs" button on the project card
+3. **Check disk space**: Projects require 2-3GB each (Moodle source + database)
+4. **Check internet connection**: Moodle download may be slow on poor connections
+5. **Restart project**: Stop and start again (downloads are resumable)
+6. **Check Docker logs manually**:
+   ```bash
+   cd ~/Documents/MoodleBox/{project-name}
+   docker compose logs moodle
+   docker compose logs db
+   ```
 
-### MySQL Container Fails to Start
+### Download Fails or Times Out
 
-**Error**: "MySQL healthcheck failed"
+**Error**: "Download timed out" or "Failed to download Moodle"
 
 **Solution**:
 
-1. Ensure MySQL 8.4+ is used (check `versions.json`)
-2. Delete `mysql_data/` folder in project directory
-3. Restart project to recreate database
-4. Check Docker Desktop has sufficient memory allocated (4GB+)
+1. **Check internet connection**: Moodle downloads are 100-200MB+
+2. **Retry automatically**: Downloads support resume - just retry the operation
+3. **Check GitHub status**: Visit [status.github.com](https://www.githubstatus.com/)
+4. **Slow connections**: Downloads may take 20-30+ minutes on slow connections
+5. **Partial downloads**: The app preserves partial downloads for automatic resume
+6. **Firewall/Proxy**: Ensure GitHub is accessible, configure Docker proxy if needed
+
+### MySQL Container Fails to Start
+
+**Error**: "MySQL healthcheck failed" or "Database connection error"
+
+**Solution**:
+
+1. **Check Docker memory**: Ensure Docker Desktop has 4GB+ RAM allocated
+2. **Delete corrupted database**: 
+   ```bash
+   cd ~/Documents/MoodleBox/{project-name}
+   rm -rf mysql_data/
+   ```
+   Then restart the project
+3. **Check MySQL logs**: `docker compose logs db`
+4. **Port conflict**: Ensure database port (default 3306) isn't in use
+5. **Disk space**: Ensure sufficient disk space for MySQL data files
 
 ### Moodle Shows "Error establishing a database connection"
 
 **Solution**:
 
-1. Wait for MySQL healthcheck to pass (can take 30-60 seconds)
-2. Check `docker-compose.yml` for correct database credentials
-3. Restart the project
+1. **Wait for MySQL**: Healthcheck can take 30-60 seconds on first start
+2. **Check container status**: Ensure `db` container is healthy
+3. **View logs**: Check project logs for database connection errors
+4. **Restart project**: Stop and start again
+5. **Verify credentials**: Check `docker-compose.yml` for correct database password
 
-### App Won't Launch
+### Project Won't Start
 
-**Issue**: Application crashes on startup
+**Error**: "Failed to start project" or containers won't start
 
 **Solution**:
 
-1. Check system meets minimum requirements
-2. Update Docker Desktop to latest version
-3. Delete app data:
+1. **Check Docker daemon**: Ensure Docker Desktop is fully started
+2. **Check port conflicts**: Another project or service may be using the port
+3. **Check disk space**: Ensure sufficient space for containers
+4. **View error message**: Check the error message in the project card
+5. **Check Docker Desktop logs**: Look for errors in Docker Desktop
+6. **Restart Docker Desktop**: Sometimes a restart fixes issues
+7. **Check permissions**: On Linux, ensure user is in docker group
+
+### App Won't Launch
+
+**Issue**: Application crashes on startup or won't open
+
+**Solution**:
+
+1. **Check system requirements**: 
+   - macOS 10.15+, Windows 10+, or Linux with recent kernel
+   - Node.js 18+ (if running from source)
+2. **Update Docker Desktop** to latest version
+3. **Clear app data** (this will reset all projects and settings):
    - **Windows**: `%APPDATA%\moodlebox`
    - **macOS**: `~/Library/Application Support/moodlebox`
    - **Linux**: `~/.config/moodlebox`
-4. Reinstall the application
+4. **Check log files**: 
+   - Logs are stored in `{workspace}/.moodlebox/logs/main.log`
+   - Click "Open Log Folder" in Settings
+5. **Reinstall the application**: Download latest release from GitHub
+
+### Permission Errors (Linux)
+
+**Error**: "Permission denied" when accessing Docker
+
+**Solution**:
+
+1. **Add user to docker group**:
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+2. **Log out and back in** (or run `newgrp docker`)
+3. **Verify permissions**: `docker info` should work without sudo
+4. **Check Docker socket permissions**: `/var/run/docker.sock` should be accessible
+
+### Slow Performance
+
+**Issue**: App is slow or unresponsive
+
+**Solution**:
+
+1. **Check Docker resources**: Allocate more CPU/RAM to Docker Desktop
+2. **Close unused projects**: Stop projects you're not using
+3. **Check disk I/O**: Ensure SSD for better performance
+4. **Reduce project count**: Too many projects can slow down sync operations
+5. **Restart Docker Desktop**: Clears cached resources
+
+### Project Status Out of Sync
+
+**Issue**: Project shows wrong status (e.g., "Ready" but containers are stopped)
+
+**Solution**:
+
+1. **Sync states**: Window focus automatically syncs, or restart app
+2. **Manual sync**: Restart the app to force a full sync
+3. **Check Docker directly**: `docker compose ps` in project folder
+4. **Report bug**: If status consistently wrong, report with project logs
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### General Questions
+
+**Q: Is MoodleBox free?**
+
+A: Yes! MoodleBox is completely free and open-source under the MIT License.
+
+**Q: Do I need Docker knowledge to use MoodleBox?**
+
+A: No! MoodleBox handles all Docker operations automatically. You just need Docker Desktop installed.
+
+**Q: Can I use MoodleBox for production?**
+
+A: No, MoodleBox is designed for **local development only**. It uses default credentials and development configurations that are not secure for production.
+
+**Q: What Moodle versions are supported?**
+
+A: MoodleBox supports all recent Moodle versions (3.11 LTS, 4.x, 5.x, and daily builds). Check `assets/versions.json` for the full list.
+
+**Q: Can I run multiple projects simultaneously?**
+
+A: Yes! Each project uses different ports, so you can run as many as your system resources allow.
+
+### Technical Questions
+
+**Q: Where are projects stored?**
+
+A: By default, projects are stored in `~/Documents/MoodleBox` (or `C:\Users\{username}\Documents\MoodleBox` on Windows). You can change this in Settings.
+
+**Q: Can I customize PHP/MySQL versions?**
+
+A: PHP and MySQL versions are automatically selected based on Moodle requirements. Advanced customization requires editing `docker-compose.yml` manually.
+
+**Q: How do I access phpMyAdmin?**
+
+A: phpMyAdmin is available at `http://localhost:{port+1}` (e.g., if Moodle is on 8080, phpMyAdmin is on 8081). Default credentials match your project's database password (found in `docker-compose.yml`).
+
+**Q: Can I use my own Moodle source code?**
+
+A: Currently, MoodleBox downloads Moodle from GitHub. To use custom code, you can replace the contents of `moodlecode/` folder after project creation.
+
+**Q: How do I backup a project?**
+
+A: Projects are stored locally. To backup:
+1. Stop the project
+2. Copy the entire project folder
+3. Restore by copying back and creating a new project with the same name/port
+
+**Q: Can I export/import projects?**
+
+A: Project duplication is available. Full export/import is planned for a future release.
+
+### Troubleshooting Questions
+
+**Q: Why is my download so slow?**
+
+A: Moodle downloads are 100-200MB+. On slow connections, this can take 20-30+ minutes. Downloads support automatic resume if interrupted.
+
+**Q: Can I change the default admin password?**
+
+A: Yes! After first login, go to Site Administration → Users → Accounts → Change password. The default is `admin` / `admin`.
+
+**Q: Why does my project keep failing to start?**
+
+A: Common causes:
+- Docker Desktop not running
+- Port conflicts
+- Insufficient disk space
+- Docker resource limits too low
+
+Check the error message in the project card for specific guidance.
+
+**Q: How do I completely remove a project?**
+
+A: Use the "Delete" button in the project card. This removes:
+- Docker containers and volumes
+- Project files and folders
+- Project metadata
+
+**Q: Can I recover a deleted project?**
+
+A: No, deletion is permanent. Always backup important projects before deleting.
+
+### Development Questions
+
+**Q: Can I contribute to MoodleBox?**
+
+A: Yes! See the [Contributing](#-contributing) section. We welcome bug reports, feature requests, and pull requests.
+
+**Q: How do I report a bug?**
+
+A: Open an issue on GitHub with:
+- Clear description
+- Steps to reproduce
+- Expected vs actual behavior
+- System information (OS, Docker version, MoodleBox version)
+- Log files (if applicable)
+
+**Q: Can I request a feature?**
+
+A: Absolutely! Open a feature request on GitHub explaining the use case and benefits.
+
+---
+
+## 📞 Getting Help
+
+If you're still experiencing issues:
+
+1. **Check this troubleshooting guide** first
+2. **Search existing issues** on [GitHub Issues](https://github.com/yourusername/ezadevbox/issues)
+3. **View logs**: Settings → Open Log Folder
+4. **Create a new issue** with detailed information
+5. **Join discussions** on [GitHub Discussions](https://github.com/yourusername/ezadevbox/discussions)
 
 ---
 

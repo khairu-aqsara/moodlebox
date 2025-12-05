@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useProjectStore } from '../store/project-store'
 import { ProjectCard } from './ProjectCard'
 import { SettingsModal } from './SettingsModal'
-import { Plus, Settings, Sliders, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Plus, Settings, Sliders, AlertTriangle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { cn } from '../lib/utils'
 
 interface DashboardProps {
@@ -17,6 +19,9 @@ export function Dashboard({ onNewProject }: DashboardProps) {
   const [dockerError, setDockerError] = useState(false)
   const [isCheckingDocker, setIsCheckingDocker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [versionFilter, setVersionFilter] = useState<string>('all')
 
   const checkDocker = async () => {
     // Prevent multiple simultaneous checks
@@ -41,6 +46,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
     // Sync project states when window gains focus
     // This handles the case where Docker was started after app launch
     // or containers were started/stopped outside the app
+    // Note: syncStates() is now debounced on the backend, so multiple calls are safe
     const syncOnFocus = async () => {
       try {
         await window.api.projects.syncStates()
@@ -77,7 +83,10 @@ export function Dashboard({ onNewProject }: DashboardProps) {
   return (
     <div className="flex flex-col h-full relative">
       {/* Modern Glassmorphic Header */}
-      <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+      <header 
+        className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60"
+        role="banner"
+      >
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-col gap-0.5">
             <h1 className="text-xl font-bold tracking-tight">MoodleBox</h1>
@@ -87,7 +96,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-6 pb-32">
+      <main className="flex-1 overflow-auto p-6 pb-32" role="main">
         {dockerError ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="max-w-md">
@@ -148,11 +157,133 @@ export function Dashboard({ onNewProject }: DashboardProps) {
               </span>
             </div>
 
-            <div className="grid gap-4">
-              {projects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search projects by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-9"
+                  aria-label="Search projects"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]" aria-label="Filter by status">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="stopped">Stopped</SelectItem>
+                  <SelectItem value="starting">Starting</SelectItem>
+                  <SelectItem value="installing">Installing</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={versionFilter} onValueChange={setVersionFilter}>
+                <SelectTrigger className="w-[180px]" aria-label="Filter by version">
+                  <SelectValue placeholder="All Versions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Versions</SelectItem>
+                  {Array.from(new Set(projects.map((p) => p.moodleVersion)))
+                    .sort()
+                    .reverse()
+                    .map((version) => (
+                      <SelectItem key={version} value={version}>
+                        Moodle {version}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Filtered Projects */}
+            {useMemo(() => {
+              let filtered = projects
+
+              // Search filter
+              if (searchQuery.trim()) {
+                const query = searchQuery.toLowerCase()
+                filtered = filtered.filter(
+                  (p) =>
+                    p.name.toLowerCase().includes(query) ||
+                    p.moodleVersion.toLowerCase().includes(query) ||
+                    p.path.toLowerCase().includes(query)
+                )
+              }
+
+              // Status filter
+              if (statusFilter !== 'all') {
+                filtered = filtered.filter((p) => p.status === statusFilter)
+              }
+
+              // Version filter
+              if (versionFilter !== 'all') {
+                filtered = filtered.filter((p) => p.moodleVersion === versionFilter)
+              }
+
+              return filtered
+            }, [projects, searchQuery, statusFilter, versionFilter]).length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="text-sm">No projects match your filters.</p>
+                {(searchQuery || statusFilter !== 'all' || versionFilter !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setStatusFilter('all')
+                      setVersionFilter('all')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {useMemo(() => {
+                  let filtered = projects
+
+                  if (searchQuery.trim()) {
+                    const query = searchQuery.toLowerCase()
+                    filtered = filtered.filter(
+                      (p) =>
+                        p.name.toLowerCase().includes(query) ||
+                        p.moodleVersion.toLowerCase().includes(query) ||
+                        p.path.toLowerCase().includes(query)
+                    )
+                  }
+
+                  if (statusFilter !== 'all') {
+                    filtered = filtered.filter((p) => p.status === statusFilter)
+                  }
+
+                  if (versionFilter !== 'all') {
+                    filtered = filtered.filter((p) => p.moodleVersion === versionFilter)
+                  }
+
+                  return filtered
+                }, [projects, searchQuery, statusFilter, versionFilter]).map((project) => (
+                  <ProjectCard key={project.id} project={project} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

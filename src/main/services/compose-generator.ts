@@ -1,4 +1,5 @@
 import { MoodleVersion, Project } from '../types'
+import { randomBytes } from 'crypto'
 
 export class ComposeGenerator {
   generate(project: Project, version: MoodleVersion): string {
@@ -103,6 +104,8 @@ export class ComposeGenerator {
   }
 
   private generatePassword(): string {
-    return 'moodle_dev_' + Math.random().toString(36).substring(2, 15)
+    // Use cryptographically secure random bytes for password generation
+    const randomPart = randomBytes(12).toString('base64').replace(/[+/=]/g, '').substring(0, 16)
+    return 'moodle_dev_' + randomPart
   }
 }

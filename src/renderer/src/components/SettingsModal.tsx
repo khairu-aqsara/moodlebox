@@ -21,6 +21,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setLocalPhpMyAdminPort(phpMyAdminPort)
   }, [theme, workspaceFolder, phpMyAdminPort])
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
   const handleSave = async () => {
     await updateSettings({
       theme: localTheme,

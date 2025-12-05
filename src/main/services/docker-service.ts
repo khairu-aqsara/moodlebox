@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { basename } from 'path'
 import log from 'electron-log'
+import { DOCKER } from '../constants'
 
 export interface DockerCommand {
   cwd: string
@@ -9,16 +10,63 @@ export interface DockerCommand {
   onClose?: (code: number) => void
 }
 
+interface DockerStatusCache {
+  isInstalled: boolean
+  timestamp: number
+}
+
 export class DockerService {
+  private dockerStatusCache: DockerStatusCache | null = null
+  private readonly DOCKER_STATUS_CACHE_TTL = DOCKER.STATUS_CACHE_TTL_MS
+
   /**
    * Check if Docker is installed and accessible
+   * 
+   * Uses caching (5 second TTL) to avoid spawning processes on every check.
+   * This improves performance when checking Docker status frequently.
+   * 
+   * @returns `true` if Docker is installed and daemon is running, `false` otherwise
+   * 
+   * @example
+   * ```typescript
+   * const isAvailable = await dockerService.checkDockerInstalled()
+   * if (!isAvailable) {
+   *   console.error('Docker is not running')
+   * }
+   * ```
    */
   async checkDockerInstalled(): Promise<boolean> {
-    return new Promise((resolve) => {
+    const now = Date.now()
+    
+    // Return cached result if still valid
+    if (
+      this.dockerStatusCache &&
+      now - this.dockerStatusCache.timestamp < this.DOCKER_STATUS_CACHE_TTL
+    ) {
+      return this.dockerStatusCache.isInstalled
+    }
+
+    // Check Docker status
+    const isInstalled = await new Promise<boolean>((resolve) => {
       const proc = spawn('docker', ['info'], { windowsHide: true, env: process.env })
       proc.on('close', (code) => resolve(code === 0))
       proc.on('error', () => resolve(false))
     })
+
+    // Update cache
+    this.dockerStatusCache = {
+      isInstalled,
+      timestamp: now
+    }
+
+    return isInstalled
+  }
+
+  /**
+   * Clear Docker status cache (useful when Docker state might have changed)
+   */
+  clearDockerStatusCache(): void {
+    this.dockerStatusCache = null
   }
 
   /**
@@ -61,6 +109,23 @@ export class DockerService {
 
   /**
    * Get container status summary for a project
+   * 
+   * Checks the status of all containers in a project's docker-compose setup.
+   * Returns a summary indicating if containers are running and healthy.
+   * 
+   * @param projectPath - Path to the project directory (contains docker-compose.yml)
+   * @returns Object with:
+   *   - `running`: true if at least one container is running
+   *   - `healthy`: true if all containers are healthy (or have no health check)
+   *   - `containerCount`: number of containers found
+   * 
+   * @example
+   * ```typescript
+   * const status = await dockerService.getProjectContainerStatus('/path/to/project')
+   * if (status.running && status.healthy) {
+   *   console.log('All containers are running and healthy')
+   * }
+   * ```
    */
   async getProjectContainerStatus(projectPath: string): Promise<{
     running: boolean
@@ -192,7 +257,7 @@ export class DockerService {
   /**
    * Wait for a service to be healthy
    */
-  async waitForHealthy(containerName: string, cwd: string, timeoutMs = 120000): Promise<void> {
+  async waitForHealthy(containerName: string, cwd: string, timeoutMs = DOCKER.HEALTH_CHECK_TIMEOUT_MS): Promise<void> {
     const startTime = Date.now()
     let lastStatus = 'unknown'
     let checkInterval: NodeJS.Timeout | null = null
@@ -421,16 +486,43 @@ export class DockerService {
   private parseDockerError(code: number | null, stderr: string, args: string[]): string {
     const lowerStderr = stderr.toLowerCase()
 
-    // Permission denied
-    if (lowerStderr.includes('permission denied') || lowerStderr.includes('dial unix')) {
+    // Docker daemon not running or restarted
+    if (
+      lowerStderr.includes('cannot connect to docker daemon') ||
+      lowerStderr.includes('is the docker daemon running') ||
+      lowerStderr.includes('connection refused') ||
+      lowerStderr.includes('docker daemon') ||
+      lowerStderr.includes('daemon is not running')
+    ) {
+      return (
+        `Docker daemon is not running (exit code ${code})\n\n` +
+        `Error: ${stderr}\n\n` +
+        `How to fix:\n` +
+        `- Start Docker Desktop and wait for it to be ready\n` +
+        `- Check Docker Desktop status in system tray/menu bar\n` +
+        `- On Linux: Run "sudo systemctl start docker"\n` +
+        `- Wait a few seconds after starting Docker before retrying`
+      )
+    }
+
+    // Permission denied or permission changes
+    if (
+      lowerStderr.includes('permission denied') ||
+      lowerStderr.includes('dial unix') ||
+      lowerStderr.includes('permission') ||
+      lowerStderr.includes('access denied') ||
+      lowerStderr.includes('unauthorized')
+    ) {
       return (
         `Docker permission error (exit code ${code})\n\n` +
         `Error: ${stderr}\n\n` +
         `How to fix:\n` +
         `- Linux: Add your user to the docker group:\n` +
         `  sudo usermod -aG docker $USER\n` +
-        `  Then log out and back in\n` +
-        `- macOS/Windows: Restart Docker Desktop`
+        `  Then log out and back in (or run: newgrp docker)\n` +
+        `- macOS/Windows: Restart Docker Desktop\n` +
+        `- Check Docker Desktop permissions in system settings\n` +
+        `- Try running Docker commands manually to verify permissions`
       )
     }
 
@@ -466,7 +558,12 @@ export class DockerService {
     }
 
     // Network issues
-    if (lowerStderr.includes('network') || lowerStderr.includes('timeout')) {
+    if (
+      lowerStderr.includes('network') ||
+      lowerStderr.includes('timeout') ||
+      lowerStderr.includes('connection') ||
+      lowerStderr.includes('unreachable')
+    ) {
       return (
         `Docker network error (exit code ${code})\n\n` +
         `Error: ${stderr}\n\n` +
@@ -474,7 +571,45 @@ export class DockerService {
         `- Check your internet connection\n` +
         `- Restart Docker Desktop\n` +
         `- Check firewall settings\n` +
-        `- Try running: docker network prune`
+        `- Try running: docker network prune\n` +
+        `- If behind a proxy, configure Docker proxy settings`
+      )
+    }
+
+    // Container/image issues
+    if (
+      lowerStderr.includes('container') ||
+      lowerStderr.includes('no such container') ||
+      lowerStderr.includes('container name') ||
+      lowerStderr.includes('already exists')
+    ) {
+      return (
+        `Docker container error (exit code ${code})\n\n` +
+        `Error: ${stderr}\n\n` +
+        `How to fix:\n` +
+        `- Try stopping and removing existing containers:\n` +
+        `  docker compose down -v (in project folder)\n` +
+        `- Check if containers are running: docker compose ps\n` +
+        `- Restart Docker Desktop if containers seem stuck`
+      )
+    }
+
+    // File system or volume issues
+    if (
+      lowerStderr.includes('volume') ||
+      lowerStderr.includes('mount') ||
+      lowerStderr.includes('file system') ||
+      lowerStderr.includes('path') ||
+      lowerStderr.includes('directory')
+    ) {
+      return (
+        `Docker volume/filesystem error (exit code ${code})\n\n` +
+        `Error: ${stderr}\n\n` +
+        `How to fix:\n` +
+        `- Check project folder permissions\n` +
+        `- Ensure project folder exists and is accessible\n` +
+        `- On Windows: Check WSL2 integration if using WSL\n` +
+        `- Try running: docker volume prune (removes unused volumes)`
       )
     }
 

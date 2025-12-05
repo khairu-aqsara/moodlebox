@@ -1,5 +1,5 @@
 import { Project } from '../types'
-import { Play, Square, Trash2, FolderOpen, ExternalLink, RefreshCw, Database } from 'lucide-react'
+import { Play, Square, Trash2, FolderOpen, ExternalLink, RefreshCw, Database, FileText } from 'lucide-react'
 import { useProjectStore } from '../store/project-store'
 import { useSettingsStore } from '../store/settings-store'
 import { Button } from './ui/button'
@@ -32,12 +32,28 @@ const STATUS_CONFIG: Record<Project['status'], { color: string; symbol: string; 
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [logsDialogOpen, setLogsDialogOpen] = useState(false)
+  const [logs, setLogs] = useState<string>('')
+  const [logsLoading, setLogsLoading] = useState(false)
   const startProject = useProjectStore((state) => state.startProject)
   const stopProject = useProjectStore((state) => state.stopProject)
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const openFolder = useProjectStore((state) => state.openFolder)
   const openBrowser = useProjectStore((state) => state.openBrowser)
   const phpMyAdminPort = useSettingsStore((state) => state.phpMyAdminPort)
+
+  const handleViewLogs = async () => {
+    setLogsDialogOpen(true)
+    setLogsLoading(true)
+    try {
+      const projectLogs = await window.api.projects.getLogs(project.id)
+      setLogs(projectLogs)
+    } catch (error: any) {
+      setLogs(`Error loading logs: ${error.message || 'Unknown error'}`)
+    } finally {
+      setLogsLoading(false)
+    }
+  }
 
   const statusConfig = STATUS_CONFIG[project.status]
 
@@ -58,12 +74,16 @@ export function ProjectCard({ project }: ProjectCardProps) {
   return (
     <>
       <TooltipProvider delayDuration={300}>
-        <div className="border-b last:border-b-0 px-6 py-5 hover:bg-accent/50 transition-colors">
+        <div 
+          className="border-b last:border-b-0 px-6 py-5 hover:bg-accent/50 transition-colors"
+          role="article"
+          aria-label={`Project ${project.name}, Moodle version ${project.moodleVersion}, status ${statusConfig.text}`}
+        >
           <div className="flex items-start justify-between gap-4">
             {/* Left: Project Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
-                <span className={`text-lg ${statusConfig.color}`}>{statusConfig.symbol}</span>
+                <span className={`text-lg ${statusConfig.color}`} aria-hidden="true">{statusConfig.symbol}</span>
                 <h3 className="font-semibold text-base truncate">
                   {project.name}{' '}
                   <span className="text-sm text-muted-foreground font-normal">
@@ -148,8 +168,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
               {project.status === 'stopped' ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button onClick={handleStart} size="icon" variant="outline">
-                      <Play className="h-4 w-4" />
+                    <Button 
+                      onClick={handleStart} 
+                      size="icon" 
+                      variant="outline"
+                      aria-label={`Start project ${project.name}`}
+                    >
+                      <Play className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Start Project</TooltipContent>
@@ -172,6 +197,15 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Open phpMyAdmin</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button onClick={handleViewLogs} size="icon" variant="outline">
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>View Logs</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -231,6 +265,20 @@ export function ProjectCard({ project }: ProjectCardProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    onClick={handleViewLogs}
+                    size="icon"
+                    variant="outline"
+                    disabled={project.status === 'deleting'}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>View Logs</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
                     onClick={() => setDeleteDialogOpen(true)}
                     size="icon"
                     variant="outline"
@@ -245,6 +293,41 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
         </div>
       </TooltipProvider>
+
+      {/* Logs Dialog */}
+      <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Docker Logs - {project.name}</DialogTitle>
+            <DialogDescription>Container logs for debugging</DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {logsLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading logs...</span>
+              </div>
+            ) : (
+              <pre className="bg-muted p-4 rounded-md overflow-auto max-h-[60vh] text-xs font-mono whitespace-pre-wrap break-words">
+                {logs || 'No logs available'}
+              </pre>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogsDialogOpen(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={handleViewLogs}
+              disabled={logsLoading}
+              variant="secondary"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${logsLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
