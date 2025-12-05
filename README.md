@@ -76,19 +76,23 @@ Built applications are located in the `dist/` directory.
 If the app icon doesn't update after rebuilding:
 
 1. **Regenerate icons**:
+
    ```bash
    npm run icons
    ```
+
    This generates `build/icon-source.png` and then creates platform-specific icons.
 
 2. **Clear Electron Builder cache**:
+
    ```bash
    # macOS/Linux
    npm run clean:cache
-   
+
    # Windows
    npm run clean:cache:win
    ```
+
    Or manually delete:
    - **macOS**: `~/Library/Caches/electron-builder`
    - **Linux**: `~/.cache/electron-builder`
@@ -100,6 +104,7 @@ If the app icon doesn't update after rebuilding:
    ```
 
 The icon files are located in `build/`:
+
 - `icon.icns` - macOS (required)
 - `icon.ico` - Windows (required)
 - `icon.png` - Linux (required)
@@ -169,12 +174,12 @@ npm run build:unpack # Unpacked directory (faster for testing)
 
 ### Project States
 
-| State        | Description                    | Action   |
-| ------------ | ------------------------------ | -------- |
-| **Ready**    | Fully operational              | Use it!  |
-| **Starting** | Containers booting up          | Wait     |
-| **Stopped**  | Containers halted              | Start it |
-| **Error**    | Something went wrong           | Check it |
+| State        | Description           | Action   |
+| ------------ | --------------------- | -------- |
+| **Ready**    | Fully operational     | Use it!  |
+| **Starting** | Containers booting up | Wait     |
+| **Stopped**  | Containers halted     | Start it |
+| **Error**    | Something went wrong  | Check it |
 
 ---
 
@@ -194,7 +199,8 @@ npm run build:unpack # Unpacked directory (faster for testing)
 
 ### Project Stuck Installing
 
-**Solution**: 
+**Solution**:
+
 - Check Docker Desktop has sufficient resources (4GB+ RAM)
 - Check internet connection (Moodle downloads are 100-200MB+)
 - View project logs for detailed error messages
