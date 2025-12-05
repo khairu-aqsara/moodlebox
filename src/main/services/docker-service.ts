@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { createServer, Server } from 'net'
 import { basename } from 'path'
 import log from 'electron-log'
 import { DOCKER } from '../constants'
@@ -21,12 +22,12 @@ export class DockerService {
 
   /**
    * Check if Docker is installed and accessible
-   * 
+   *
    * Uses caching (5 second TTL) to avoid spawning processes on every check.
    * This improves performance when checking Docker status frequently.
-   * 
+   *
    * @returns `true` if Docker is installed and daemon is running, `false` otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const isAvailable = await dockerService.checkDockerInstalled()
@@ -37,7 +38,7 @@ export class DockerService {
    */
   async checkDockerInstalled(): Promise<boolean> {
     const now = Date.now()
-    
+
     // Return cached result if still valid
     if (
       this.dockerStatusCache &&
@@ -96,7 +97,7 @@ export class DockerService {
           const containers = Array.isArray(parsed) ? parsed : [parsed]
 
           // Check if at least one container is running
-          const hasRunning = containers.some((c: any) => c.State === 'running')
+          const hasRunning = containers.some((c: { State?: string }) => c.State === 'running')
           resolve(hasRunning)
         } catch {
           resolve(false)
@@ -109,16 +110,16 @@ export class DockerService {
 
   /**
    * Get container status summary for a project
-   * 
+   *
    * Checks the status of all containers in a project's docker-compose setup.
    * Returns a summary indicating if containers are running and healthy.
-   * 
+   *
    * @param projectPath - Path to the project directory (contains docker-compose.yml)
    * @returns Object with:
    *   - `running`: true if at least one container is running
    *   - `healthy`: true if all containers are healthy (or have no health check)
    *   - `containerCount`: number of containers found
-   * 
+   *
    * @example
    * ```typescript
    * const status = await dockerService.getProjectContainerStatus('/path/to/project')
@@ -152,7 +153,9 @@ export class DockerService {
 
       proc.on('close', (code) => {
         if (code !== 0) {
-          log.debug(`docker compose ps failed with code ${code} in ${projectPath}, stderr: ${stderr}`)
+          log.debug(
+            `docker compose ps failed with code ${code} in ${projectPath}, stderr: ${stderr}`
+          )
           resolve({ running: false, healthy: false, containerCount: 0 })
           return
         }
@@ -169,11 +172,15 @@ export class DockerService {
           // docker compose ps --format json returns one JSON object per line
           // Parse each line as a separate JSON object
           const lines = trimmedOutput.split('\n').filter((line) => line.trim())
-          const containers: any[] = []
+          interface ContainerInfo {
+            State?: string
+            Health?: string
+          }
+          const containers: ContainerInfo[] = []
 
           for (const line of lines) {
             try {
-              const container = JSON.parse(line.trim())
+              const container = JSON.parse(line.trim()) as ContainerInfo
               containers.push(container)
             } catch (parseError) {
               log.debug(`Failed to parse container line: ${line}`, parseError)
@@ -186,8 +193,8 @@ export class DockerService {
             return
           }
 
-          const runningContainers = containers.filter((c: any) => c.State === 'running')
-          const allHealthy = containers.every((c: any) => {
+          const runningContainers = containers.filter((c: ContainerInfo) => c.State === 'running')
+          const allHealthy = containers.every((c: ContainerInfo) => {
             if (c.Health) {
               return c.Health === 'healthy'
             }
@@ -257,7 +264,11 @@ export class DockerService {
   /**
    * Wait for a service to be healthy
    */
-  async waitForHealthy(containerName: string, cwd: string, timeoutMs = DOCKER.HEALTH_CHECK_TIMEOUT_MS): Promise<void> {
+  async waitForHealthy(
+    containerName: string,
+    cwd: string,
+    timeoutMs = DOCKER.HEALTH_CHECK_TIMEOUT_MS
+  ): Promise<void> {
     const startTime = Date.now()
     let lastStatus = 'unknown'
     let checkInterval: NodeJS.Timeout | null = null
@@ -364,14 +375,13 @@ export class DockerService {
       })
 
       let output = ''
-      let stderr = ''
 
       proc.stdout?.on('data', (data) => {
         output += data.toString()
       })
 
-      proc.stderr?.on('data', (data) => {
-        stderr += data.toString()
+      proc.stderr?.on('data', () => {
+        // Ignore stderr for inspect command
       })
 
       proc.on('close', (code) => {
@@ -470,8 +480,11 @@ export class DockerService {
    */
   async checkPort(port: number): Promise<boolean> {
     return new Promise((resolve) => {
-      const server = require('net').createServer()
-      server.once('error', () => resolve(false))
+      const server: Server = createServer()
+      server.once('error', () => {
+        server.close()
+        resolve(false)
+      })
       server.once('listening', () => {
         server.close()
         resolve(true)

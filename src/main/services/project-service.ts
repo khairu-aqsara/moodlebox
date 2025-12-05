@@ -1,12 +1,13 @@
 import { Project, VersionsData, ProgressInfo } from '../types'
 import { promises as fs } from 'fs'
+import { spawn, ChildProcess } from 'child_process'
 import { DockerService } from './docker-service'
 import { ComposeGenerator } from './compose-generator'
 import { BrowserWindow } from 'electron'
 import Store from 'electron-store'
 import log from 'electron-log'
 import { getAssetPath } from '../utils/asset-path'
-import { join, sep } from 'path'
+import { join, sep, resolve } from 'path'
 import { PROJECT_SYNC, PORTS } from '../constants'
 
 interface ProjectStoreSchema {
@@ -30,6 +31,19 @@ export class ProjectService {
   private readonly SYNC_DEBOUNCE_MS = PROJECT_SYNC.DEBOUNCE_MS
   private readonly SYNC_COOLDOWN_MS = PROJECT_SYNC.COOLDOWN_MS
 
+  /**
+   * Statuses that represent active operations that should never be interrupted by sync.
+   * Sync will skip projects in these states to avoid interfering with running processes.
+   */
+  private readonly ACTIVE_OPERATION_STATUSES: Project['status'][] = [
+    'provisioning', // Downloading Moodle source
+    'installing', // Installing Moodle
+    'starting', // Starting containers
+    'waiting', // Waiting for health checks
+    'stopping', // Stopping containers
+    'deleting' // Deleting project
+  ]
+
   constructor() {
     const rawStore = new Store<ProjectStoreSchema>({
       defaults: {
@@ -44,15 +58,15 @@ export class ProjectService {
 
   /**
    * Load Moodle version data from assets/versions.json
-   * 
+   *
    * This method reads the bundled versions.json file which contains:
    * - Supported Moodle versions
    * - PHP and MySQL requirements for each version
    * - Download URLs
    * - Special configuration flags (webroot, composer requirements)
-   * 
+   *
    * @throws {Error} If versions.json cannot be read or parsed
-   * 
+   *
    * @example
    * ```typescript
    * await projectService.loadVersionsData()
@@ -77,36 +91,40 @@ export class ProjectService {
 
   /**
    * Sync all projects with actual Docker container states (debounced)
-   * 
+   *
    * This method ensures the in-memory project states match the actual Docker container states.
    * It's automatically debounced to avoid excessive Docker queries and only syncs when Docker
    * state actually changes.
-   * 
+   *
    * **When to call:**
    * - On app startup (with force=true)
    * - When window gains focus (debounced automatically)
    * - After Docker state changes
-   * 
+   *
    * **What it does:**
    * - Checks if Docker is available
    * - For each project, checks container status via `docker compose ps`
    * - Updates project status to match reality (ready/stopped/starting/error)
    * - Handles projects that were started/stopped outside the app
-   * 
+   *
+   * **Important:** Projects in active operation statuses (provisioning, installing, starting,
+   * waiting, stopping, deleting) are skipped during sync to avoid interrupting running processes.
+   * This ensures downloads, installations, and container operations complete without interference.
+   *
    * @param force - If true, bypass debounce and cooldown checks (use on startup)
-   * 
+   *
    * @example
    * ```typescript
    * // On startup
    * await projectService.syncProjectStates(true)
-   * 
+   *
    * // On window focus (automatically debounced)
    * await projectService.syncProjectStates()
    * ```
    */
   async syncProjectStates(force: boolean = false): Promise<void> {
     const now = Date.now()
-    
+
     // Check cooldown period (unless forced)
     if (!force && now - this.lastSyncTime < this.SYNC_COOLDOWN_MS) {
       log.debug(`Sync skipped - cooldown period (${this.SYNC_COOLDOWN_MS}ms) not elapsed`)
@@ -148,19 +166,27 @@ export class ProjectService {
 
     // Check if Docker is available first
     const dockerAvailable = await this.dockerService.checkDockerInstalled()
-    
+
     // Only sync if Docker status changed or if Docker is now available
     if (this.lastDockerStatus === dockerAvailable && !dockerAvailable) {
       log.debug('Docker status unchanged and not available - skipping sync')
       return
     }
-    
+
     this.lastDockerStatus = dockerAvailable
 
     if (!dockerAvailable) {
       log.warn('Docker not available during sync - marking all projects as stopped')
       // If Docker is not running, mark all projects as stopped
+      // But skip projects in active operations to avoid interrupting running processes
       for (const project of projects) {
+        if (this.ACTIVE_OPERATION_STATUSES.includes(project.status)) {
+          log.debug(
+            `Skipping sync for project ${project.name} - status is ${project.status} (active operation, Docker check skipped)`
+          )
+          continue
+        }
+
         if (project.status !== 'stopped' && project.status !== 'error') {
           this.updateProject(project.id, {
             status: 'stopped',
@@ -178,6 +204,16 @@ export class ProjectService {
     // Parallelize Docker status checks for better performance
     const syncPromises = projects.map(async (project) => {
       try {
+        // Skip syncing projects that are in active operations
+        // These operations should not be interrupted by sync, as they represent running processes
+        // (downloads, installations, container operations, etc.)
+        if (this.ACTIVE_OPERATION_STATUSES.includes(project.status)) {
+          log.debug(
+            `Skipping sync for project ${project.name} - status is ${project.status} (active operation)`
+          )
+          return
+        }
+
         // Check if project folder exists
         try {
           await fs.access(project.path)
@@ -223,7 +259,12 @@ export class ProjectService {
           }
         } else {
           // No containers running - mark as stopped
-          if (project.status !== 'stopped' && project.status !== 'error') {
+          // But skip if project is in an active operation status (shouldn't happen due to early return, but be safe)
+          if (
+            project.status !== 'stopped' &&
+            project.status !== 'error' &&
+            !this.ACTIVE_OPERATION_STATUSES.includes(project.status)
+          ) {
             log.info(
               `Project ${project.name} has no running containers (running=${containerStatus.running}, count=${containerStatus.containerCount}) - updating status to stopped`
             )
@@ -240,8 +281,17 @@ export class ProjectService {
       } catch (error) {
         log.error(`Error syncing project ${project.id}:`, error)
         // On error, mark as stopped to be safe
-        if (project.status !== 'stopped' && project.status !== 'error') {
+        // But don't interrupt active operations - they should complete on their own
+        if (
+          project.status !== 'stopped' &&
+          project.status !== 'error' &&
+          !this.ACTIVE_OPERATION_STATUSES.includes(project.status)
+        ) {
           this.updateProject(project.id, { status: 'stopped' })
+        } else if (this.ACTIVE_OPERATION_STATUSES.includes(project.status)) {
+          log.debug(
+            `Skipping error sync for project ${project.name} - status is ${project.status} (active operation)`
+          )
         }
       }
     })
@@ -263,15 +313,15 @@ export class ProjectService {
 
   /**
    * Validate port number is in valid range and not reserved
-   * 
+   *
    * Validates that a port number:
    * - Is an integer between 1 and 65535
    * - Is not a privileged port (below 1024)
    * - Warns if it's a commonly reserved port
-   * 
+   *
    * @param port - Port number to validate
    * @throws {Error} If port is invalid or privileged
-   * 
+   *
    * @example
    * ```typescript
    * this.validatePort(8080) // OK
@@ -295,13 +345,15 @@ export class ProjectService {
 
     // Common reserved ports to avoid
     if (PORTS.RESERVED_PORTS.includes(port)) {
-      log.warn(`Port ${port} is a commonly used port. Consider using a different port to avoid conflicts.`)
+      log.warn(
+        `Port ${port} is a commonly used port. Consider using a different port to avoid conflicts.`
+      )
     }
   }
 
   /**
    * Create a new Moodle project
-   * 
+   *
    * Creates a new project with the following steps:
    * 1. Validates project name, port, and path
    * 2. Checks for duplicate names/paths/ports
@@ -310,14 +362,14 @@ export class ProjectService {
    * 5. Creates project directory
    * 6. Generates docker-compose.yml with appropriate configuration
    * 7. Saves project metadata to persistent storage
-   * 
+   *
    * **Note:** This only creates the project structure. To actually start Moodle,
    * call `startProject()` after creation.
-   * 
+   *
    * @param project - Project configuration (without id and createdAt)
    * @returns The created project with generated id and createdAt timestamp
    * @throws {Error} If validation fails, port conflicts exist, or creation fails
-   * 
+   *
    * @example
    * ```typescript
    * const project = await projectService.createProject({
@@ -338,20 +390,68 @@ export class ProjectService {
     if (project.path.includes('..') || project.path.includes('~')) {
       log.warn(`Project path contains suspicious characters: ${project.path}`)
     }
-    
+
     // Ensure path uses proper separators (cross-platform)
     // Normalize path separators - path.join() handles this, but normalize input first
     if (!project.path || project.path.trim() === '') {
       throw new Error('Project path cannot be empty')
     }
-    
+
     // Normalize path separators for cross-platform compatibility
     // Convert any path separators to the platform-specific separator
-    const normalizedPath = project.path.split(/[/\\]/).filter(Boolean).join(sep)
+    let normalizedPath = project.path.split(/[/\\]/).filter(Boolean).join(sep)
+
+    // Auto-fix paths that look absolute but are missing the leading slash/drive letter
+    const isUnixLike = sep === '/'
+
+    if (isUnixLike) {
+      // On Unix-like systems, if path doesn't start with / but looks like an absolute path
+      // (e.g., "Users/...", "home/...", "var/..."), add the leading slash
+      if (
+        !normalizedPath.startsWith('/') &&
+        (normalizedPath.startsWith('Users/') ||
+          normalizedPath.startsWith('home/') ||
+          normalizedPath.startsWith('var/') ||
+          normalizedPath.startsWith('opt/') ||
+          normalizedPath.startsWith('usr/'))
+      ) {
+        log.warn(
+          `Auto-fixing path missing leading slash: "${normalizedPath}" -> "/${normalizedPath}"`
+        )
+        normalizedPath = '/' + normalizedPath
+      }
+    } else {
+      // On Windows, if path doesn't have drive letter or UNC, try to resolve it
+      if (!/^[a-zA-Z]:/.test(normalizedPath) && !normalizedPath.startsWith('\\\\')) {
+        // Path might be relative - resolve will make it absolute from cwd
+        // But log a warning since this might not be what user intended
+        log.warn(
+          `Path appears to be relative, resolving from current directory: "${normalizedPath}"`
+        )
+      }
+    }
+
+    // Resolve the path to handle any remaining relative components (like . or ..)
+    // This ensures we have a clean, absolute path
+    normalizedPath = resolve(normalizedPath)
+
+    // Final validation: ensure the resolved path is absolute
+    const isAbsolute = isUnixLike
+      ? normalizedPath.startsWith('/')
+      : /^([a-zA-Z]:\\|\\\\)/.test(normalizedPath)
+
+    if (!isAbsolute) {
+      throw new Error(
+        `Project path must be an absolute path.\n\n` +
+          `Received: "${project.path}"\n` +
+          `After normalization: "${normalizedPath}"\n\n` +
+          `Please ensure your workspace folder is configured correctly in settings.`
+      )
+    }
 
     // Normalize path for comparison (cross-platform)
     const normalizedProjectPath = normalizedPath
-    
+
     // Check for existing project with same name/path
     const existingProjects = this.getAllProjects()
     const duplicatePath = existingProjects.find((p) => {
@@ -386,16 +486,21 @@ export class ProjectService {
 
     // Generate random port for database (10000-60000) and ensure it's unique
     // Validate database port as well
-    let dbPort = Math.floor(Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN)
+    let dbPort = Math.floor(
+      Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN
+    )
     let attempts = 0
     while (existingProjects.some((p) => p.dbPort === dbPort) && attempts < 10) {
-      dbPort = Math.floor(Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN)
+      dbPort = Math.floor(
+        Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN
+      )
       attempts++
     }
 
     // Validate database port range
     if (dbPort < PORTS.MIN_PORT || dbPort > PORTS.MAX_PORT) {
-      dbPort = PORTS.DB_PORT_MIN + Math.floor(Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN)) // Ensure valid range
+      dbPort =
+        PORTS.DB_PORT_MIN + Math.floor(Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN)) // Ensure valid range
     }
 
     // Check if database port is available on the system
@@ -403,7 +508,9 @@ export class ProjectService {
     if (!dbPortAvailable) {
       // Try a few more times to find an available port
       for (let i = 0; i < 10; i++) {
-        dbPort = Math.floor(Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN)
+        dbPort = Math.floor(
+          Math.random() * (PORTS.DB_PORT_MAX - PORTS.DB_PORT_MIN + 1) + PORTS.DB_PORT_MIN
+        )
         const available = await this.dockerService.checkPort(dbPort)
         if (available && !existingProjects.some((p) => p.dbPort === dbPort)) {
           break
@@ -430,16 +537,23 @@ export class ProjectService {
     if (dockerAvailable) {
       try {
         // Check if project directory exists
-        const dirExists = await fs.access(normalizedProjectPath).then(() => true).catch(() => false)
-        
+        const dirExists = await fs
+          .access(normalizedProjectPath)
+          .then(() => true)
+          .catch(() => false)
+
         if (dirExists) {
           // Check if docker-compose.yml exists (indicates containers might exist)
           const composePath = join(normalizedProjectPath, 'docker-compose.yml')
-          const composeExists = await fs.access(composePath).then(() => true).catch(() => false)
-          
+          const composeExists = await fs
+            .access(composePath)
+            .then(() => true)
+            .catch(() => false)
+
           if (composeExists) {
             // Check if containers actually exist
-            const containerStatus = await this.dockerService.getProjectContainerStatus(normalizedProjectPath)
+            const containerStatus =
+              await this.dockerService.getProjectContainerStatus(normalizedProjectPath)
             if (containerStatus.containerCount > 0) {
               throw new Error(
                 `Docker containers already exist for this project path.\n\n` +
@@ -456,9 +570,9 @@ export class ProjectService {
             }
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // If error is our custom error, re-throw it
-        if (error.message?.includes('Docker containers already exist')) {
+        if (error instanceof Error && error.message?.includes('Docker containers already exist')) {
           throw error
         }
         // Otherwise, log and continue (might be a permission issue or Docker not accessible)
@@ -500,24 +614,24 @@ export class ProjectService {
 
   /**
    * Duplicate an existing project with a new name and port
-   * 
+   *
    * Creates a copy of an existing project with:
    * - New project name
    * - New port (validated and checked for conflicts)
    * - Same Moodle version
    * - Copied docker-compose.yml (with updated ports)
-   * 
+   *
    * **Note:** This creates a new project structure but does NOT copy:
    * - Moodle source code (will be downloaded on first start)
    * - Database data
    * - Moodledata files
-   * 
+   *
    * @param id - ID of the source project to duplicate
    * @param newName - Name for the new project (must be unique)
    * @param newPort - Port for the new project (must be available)
    * @returns The newly created duplicated project
    * @throws {Error} If source project not found, name/port conflicts, or duplication fails
-   * 
+   *
    * @example
    * ```typescript
    * const duplicated = await projectService.duplicateProject(
@@ -580,12 +694,12 @@ export class ProjectService {
     try {
       const composePath = join(sourceProject.path, 'docker-compose.yml')
       const composeContent = await fs.readFile(composePath, 'utf-8')
-      
+
       // Replace port numbers in docker-compose.yml
       const updatedCompose = composeContent
         .replace(new RegExp(`"${sourceProject.port}:80"`, 'g'), `"${newPort}:80"`)
         .replace(new RegExp(`"${(sourceProject.port || 8080) + 1}:80"`, 'g'), `"${newPort + 1}:80"`)
-      
+
       await fs.writeFile(join(newPath, 'docker-compose.yml'), updatedCompose)
     } catch (error) {
       log.warn('Could not copy docker-compose.yml, will be generated on first start:', error)
@@ -634,7 +748,7 @@ export class ProjectService {
 
   /**
    * Start a Moodle project
-   * 
+   *
    * Starts a project by:
    * 1. Checking Docker availability
    * 2. Downloading Moodle source (if first run)
@@ -643,13 +757,13 @@ export class ProjectService {
    * 5. Installing Moodle (if first run)
    * 6. Configuring Moodle (disabling password policy, restoring sample course)
    * 7. Waiting for HTTP server to respond
-   * 
+   *
    * Progress updates are sent via the `onLog` callback and project status updates.
-   * 
+   *
    * @param id - Project ID to start
    * @param onLog - Optional callback for log messages during startup
    * @throws {Error} If Docker not available, project not found, or startup fails
-   * 
+   *
    * @example
    * ```typescript
    * await projectService.startProject('project-id', (log) => {
@@ -693,7 +807,7 @@ export class ProjectService {
         errorMessage?: string,
         statusDetail?: string,
         progress?: ProgressInfo
-      ) => {
+      ): void => {
         const updates: Partial<Project> = { status, lastUsed: new Date().toISOString() }
 
         if (status === 'error' && errorMessage) {
@@ -714,9 +828,10 @@ export class ProjectService {
       const lifecycleManager = new LifecycleManager()
 
       await lifecycleManager.startProject(project, version.download, version, onStatusUpdate, onLog)
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Error already handled by lifecycle manager, but ensure state is updated
-      onLog?.(`❌ Failed to start project: ${err?.message || err}`)
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      onLog?.(`❌ Failed to start project: ${errorMessage}`)
     }
   }
 
@@ -740,14 +855,14 @@ export class ProjectService {
 
   /**
    * Get Docker container logs for a project
-   * 
+   *
    * Retrieves the last 500 lines of logs from all containers in the project's
    * docker-compose setup. Useful for debugging container issues.
-   * 
+   *
    * @param id - Project ID to get logs for
    * @returns Log output from all containers (last 500 lines)
    * @throws {Error} If project not found or log retrieval fails
-   * 
+   *
    * @example
    * ```typescript
    * const logs = await projectService.getProjectLogs('project-id')
@@ -759,9 +874,13 @@ export class ProjectService {
     if (!project) throw new Error('Project not found')
 
     return new Promise((resolve, reject) => {
-      const { spawn } = require('child_process')
       // Use cross-platform spawn options
-      const spawnOptions: any = {
+      const spawnOptions: {
+        cwd: string
+        env: NodeJS.ProcessEnv
+        shell: boolean
+        windowsHide?: boolean
+      } = {
         cwd: project.path,
         env: process.env,
         shell: false
@@ -770,8 +889,8 @@ export class ProjectService {
       if (process.platform === 'win32') {
         spawnOptions.windowsHide = true
       }
-      
-      const proc = spawn('docker', ['compose', 'logs', '--tail', '500'], spawnOptions)
+
+      const proc: ChildProcess = spawn('docker', ['compose', 'logs', '--tail', '500'], spawnOptions)
 
       let output = ''
       let errorOutput = ''

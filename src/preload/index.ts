@@ -12,7 +12,16 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
+  status:
+    | 'provisioning'
+    | 'installing'
+    | 'starting'
+    | 'waiting'
+    | 'ready'
+    | 'stopped'
+    | 'stopping'
+    | 'deleting'
+    | 'error'
   path: string
   createdAt: string
   lastUsed?: string
@@ -33,27 +42,32 @@ export interface ProgressInfo {
 const api = {
   projects: {
     getAll: () => ipcRenderer.invoke('projects:getAll'),
-    create: (project: Omit<Project, 'id' | 'createdAt'>) => ipcRenderer.invoke('projects:create', project),
+    create: (project: Omit<Project, 'id' | 'createdAt'>) =>
+      ipcRenderer.invoke('projects:create', project),
     start: (id: string) => ipcRenderer.invoke('projects:start', id),
     stop: (id: string) => ipcRenderer.invoke('projects:stop', id),
     delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
-    duplicate: (id: string, newName: string, newPort: number) => ipcRenderer.invoke('projects:duplicate', id, newName, newPort),
+    duplicate: (id: string, newName: string, newPort: number) =>
+      ipcRenderer.invoke('projects:duplicate', id, newName, newPort),
     openFolder: (path: string) => ipcRenderer.invoke('projects:openFolder', path),
     openBrowser: (port: number) => ipcRenderer.invoke('projects:openBrowser', port),
     getDefaultPath: () => ipcRenderer.invoke('projects:getDefaultPath'),
-    onLog: (callback: (data: { id: string; log: string }) => void) => {
-      const handler = (_: unknown, data: { id: string; log: string }) => callback(data)
+    onLog: (callback: (data: { id: string; log: string }) => void): (() => void) => {
+      const handler = (_: unknown, data: { id: string; log: string }): void => callback(data)
       ipcRenderer.on('project:log', handler)
       // Return cleanup function
-      return () => {
+      return (): void => {
         ipcRenderer.removeListener('project:log', handler)
       }
     },
-    onProjectUpdate: (callback: (data: { id: string; updates: Partial<Project> }) => void) => {
-      const handler = (_: unknown, data: { id: string; updates: Partial<Project> }) => callback(data)
+    onProjectUpdate: (
+      callback: (data: { id: string; updates: Partial<Project> }) => void
+    ): (() => void) => {
+      const handler = (_: unknown, data: { id: string; updates: Partial<Project> }): void =>
+        callback(data)
       ipcRenderer.on('project:updated', handler)
       // Return cleanup function
-      return () => {
+      return (): void => {
         ipcRenderer.removeListener('project:updated', handler)
       }
     },
@@ -79,7 +93,7 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
+  } catch {
     // Error during context bridge setup - this is a critical error
     // In production, this would be logged by electron-log if available
     // In preload, we can't use electron-log, so we rely on Electron's error handling

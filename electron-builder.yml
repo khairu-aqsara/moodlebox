@@ -151,6 +151,10 @@ rpm:
 npmRebuild: true
 buildDependenciesFromSource: false
 
+# Force icon regeneration (prevents caching issues)
+# Note: If icons don't update, run: npm run clean:cache && npm run icons
+# Then rebuild: npm run build:mac (or build:win/build:linux)
+
 # Auto-update configuration (disabled for unsigned builds)
 publish:
   provider: generic

@@ -16,6 +16,38 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 
+// Helper function to join paths cross-platform (renderer-safe)
+// Preserves absolute paths (leading / on Unix, drive letter on Windows)
+function joinPath(...parts: string[]): string {
+  if (parts.length === 0) return ''
+
+  const filtered = parts.filter(Boolean)
+  if (filtered.length === 0) return ''
+
+  // Check if first part is an absolute path
+  const firstPart = filtered[0]
+  const isAbsolute =
+    firstPart.startsWith('/') || /^[a-zA-Z]:/.test(firstPart) || firstPart.startsWith('\\\\')
+
+  // If absolute, preserve the leading character(s)
+  if (isAbsolute) {
+    const rest = filtered.slice(1).map((part) => part.replace(/^\/+|\/+$/g, ''))
+    const joined = [firstPart.replace(/\/+$/, ''), ...rest].join('/').replace(/\/+/g, '/')
+    return joined
+  }
+
+  // Relative path - join normally
+  return filtered
+    .map((part, i) => {
+      if (i === 0) {
+        return part.replace(/\/+$/, '')
+      }
+      return part.replace(/^\/+|\/+$/g, '')
+    })
+    .join('/')
+    .replace(/\/+/g, '/')
+}
+
 interface NewProjectModalProps {
   onClose: () => void
 }
@@ -26,8 +58,14 @@ const projectSchema = z.object({
     .string()
     .min(1, 'Project name is required')
     .max(100, 'Project name must be 100 characters or less')
-    .regex(/^[a-zA-Z0-9\s\-_]+$/, 'Project name can only contain letters, numbers, spaces, hyphens, and underscores')
-    .refine((val) => !val.startsWith(' ') && !val.endsWith(' '), 'Project name cannot start or end with spaces'),
+    .regex(
+      /^[a-zA-Z0-9\s\-_]+$/,
+      'Project name can only contain letters, numbers, spaces, hyphens, and underscores'
+    )
+    .refine(
+      (val) => !val.startsWith(' ') && !val.endsWith(' '),
+      'Project name cannot start or end with spaces'
+    ),
   port: z
     .number()
     .int('Port must be an integer')
@@ -36,21 +74,30 @@ const projectSchema = z.object({
   moodleVersion: z.string().min(1, 'Moodle version is required')
 })
 
-export function NewProjectModal({ onClose }: NewProjectModalProps) {
+export function NewProjectModal({ onClose }: NewProjectModalProps): JSX.Element {
   const [projectName, setProjectName] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
   const [port, setPort] = useState('8080')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const addProject = useProjectStore((state) => state.addProject)
-  const workspaceFolder = useSettingsStore((state) => state.workspaceFolder)
+  const loadSettings = useSettingsStore((state) => state.loadSettings)
+
+  // Ensure settings are loaded when modal opens
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
 
   const versions = versionManager.getAllVersions()
   const selectedVersionData = selectedVersion
     ? versionManager.getVersionByNumber(selectedVersion)
     : null
 
-  const handleCreate = () => {
-    if (!workspaceFolder) {
+  const handleCreate = async (): Promise<void> => {
+    // Ensure settings are loaded before creating project
+    await loadSettings()
+    const currentWorkspaceFolder = useSettingsStore.getState().workspaceFolder
+
+    if (!currentWorkspaceFolder || currentWorkspaceFolder.trim() === '') {
       setErrors({ general: 'Workspace folder is not configured. Please set it in settings.' })
       return
     }
@@ -84,20 +131,36 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
 
     const projectSlug = projectName.toLowerCase().replace(/\s+/g, '-')
 
-    addProject({
-      name: projectName.trim(),
-      moodleVersion: selectedVersion,
-      port: portNum,
-      status: 'stopped',
-      path: `${workspaceFolder}/${projectSlug}`
-    })
+    try {
+      // Use proper path joining instead of string concatenation
+      const projectPath = joinPath(currentWorkspaceFolder, projectSlug)
 
-    onClose()
+      await addProject({
+        name: projectName.trim(),
+        moodleVersion: selectedVersion,
+        port: portNum,
+        status: 'stopped',
+        path: projectPath
+      })
+      onClose()
+    } catch (error: unknown) {
+      // Handle errors from IPC (e.g., port conflicts, duplicate names, etc.)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create project'
+
+      // Try to extract field-specific errors (e.g., port conflicts)
+      if (errorMessage.includes('Port') && errorMessage.includes('already in use')) {
+        setErrors({ port: errorMessage })
+      } else if (errorMessage.includes('already exists')) {
+        setErrors({ name: errorMessage })
+      } else {
+        setErrors({ general: errorMessage })
+      }
+    }
   }
 
   // Handle Escape key to close modal
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         onClose()
       }
@@ -115,9 +178,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
             Set up a new Moodle development environment
-            <span className="text-xs text-muted-foreground block mt-1">
-              Press Escape to cancel
-            </span>
+            <span className="text-xs text-muted-foreground block mt-1">Press Escape to cancel</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -161,8 +222,8 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
                 if (errors.moodleVersion) setErrors({ ...errors, moodleVersion: '' })
               }}
             >
-              <SelectTrigger 
-                id="version" 
+              <SelectTrigger
+                id="version"
                 className={errors.moodleVersion ? 'border-destructive' : ''}
                 aria-invalid={!!errors.moodleVersion}
                 aria-describedby={errors.moodleVersion ? 'version-error' : undefined}
@@ -171,11 +232,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
               </SelectTrigger>
               <SelectContent role="listbox">
                 {versions.map((version) => (
-                  <SelectItem 
-                    key={version.version} 
-                    value={version.version}
-                    role="option"
-                  >
+                  <SelectItem key={version.version} value={version.version} role="option">
                     Moodle {version.version} ({version.type.toUpperCase()}) - PHP{' '}
                     {version.requirements.php}
                   </SelectItem>
@@ -216,30 +273,12 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
           </div>
 
           {selectedVersionData && (
-            <div className="space-y-3">
-              <div className="rounded-lg bg-muted p-3 text-sm">
-                <p className="font-medium mb-1">Auto-configured:</p>
-                <ul className="text-muted-foreground space-y-1">
-                  <li>• PHP {selectedVersionData.requirements.php}</li>
-                  <li>• Mysql {selectedVersionData.requirements.mysql}</li>
-                </ul>
-              </div>
-              <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 text-sm">
-                <div className="flex items-start gap-2">
-                  <span className="text-yellow-600 dark:text-yellow-400 text-lg flex-shrink-0 mt-0.5">⚠️</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-yellow-800 dark:text-yellow-300 mb-1">
-                      Default Admin Credentials
-                    </p>
-                    <p className="text-yellow-700 dark:text-yellow-400">
-                      Username: <strong>admin</strong> / Password: <strong>admin</strong>
-                    </p>
-                    <p className="text-yellow-600 dark:text-yellow-500 text-xs mt-1">
-                      These are default development credentials. Change them after first login for security.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div className="rounded-lg bg-muted p-3 text-sm">
+              <p className="font-medium mb-1">Auto-configured:</p>
+              <ul className="text-muted-foreground space-y-1">
+                <li>• PHP {selectedVersionData.requirements.php}</li>
+                <li>• Mysql {selectedVersionData.requirements.mysql}</li>
+              </ul>
             </div>
           )}
         </div>
