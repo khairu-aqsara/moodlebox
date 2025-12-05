@@ -40,8 +40,8 @@ export class LifecycleManager {
       } else {
         await this.subsequentRunFlow(project, version, onStatusUpdate, onLog)
       }
-    } catch (err: any) {
-      const errorMessage = err?.message || String(err)
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
       onStatusUpdate('error', errorMessage)
       onLog?.(`❌ Error: ${errorMessage}`)
       throw err // Re-throw so project-service can handle it
@@ -69,28 +69,60 @@ export class LifecycleManager {
     if (!alreadyDownloaded) {
       onStatusUpdate('provisioning', undefined, 'Downloading Moodle source code...')
       onLog?.('📥 Downloading Moodle source code...')
-      onLog?.('💡 Tip: Large downloads may take 20-30+ minutes on slow connections. Progress will be shown below.')
+      onLog?.(
+        '💡 Tip: Large downloads may take 20-30+ minutes on slow connections. Progress will be shown below.'
+      )
 
       await this.downloader.download(
         moodleDownloadUrl,
         project.path,
-        (percentage, downloaded, total) => {
+        (percentage, downloaded, total, speed) => {
           const downloadedMB = (downloaded / 1024 / 1024).toFixed(1)
-          const totalMB = (total / 1024 / 1024).toFixed(1)
+          const totalMB = total > 0 ? (total / 1024 / 1024).toFixed(1) : '?'
+          const percentageText = total > 0 ? `${percentage.toFixed(0)}%` : ''
+
+          // Format: "Downloading: {speed} {downloaded}MB / {total}MB {percentage}%"
+          // Or if total unknown: "Downloading: {speed} {downloaded}MB"
+          let message = 'Downloading:'
+          if (speed) {
+            message += ` ${speed}`
+          }
+          message += ` ${downloadedMB}MB`
+          if (total > 0) {
+            message += ` / ${totalMB}MB`
+          }
+          if (percentageText) {
+            message += ` ${percentageText}`
+          }
+
           const progressInfo: ProgressInfo = {
             phase: 'download',
-            percentage,
+            percentage: total > 0 ? percentage : undefined, // undefined indicates indeterminate
             current: downloaded,
-            total,
-            message: `Downloading: ${percentage.toFixed(0)}% (${downloadedMB}MB / ${totalMB}MB)`
+            total: total > 0 ? total : undefined,
+            message
           }
           onStatusUpdate('provisioning', undefined, progressInfo.message, progressInfo)
           // Only log every 10% to avoid spam, but always update UI
-          if (percentage % 10 < 1 || percentage >= 100) {
+          if (total > 0 && (percentage % 10 < 1 || percentage >= 100)) {
             onLog?.(`📥 ${progressInfo.message}`)
+          } else if (total === 0) {
+            // Log periodically when total is unknown (every 5MB)
+            const downloadedMBNum = downloaded / 1024 / 1024
+            if (downloadedMBNum % 5 < 0.1) {
+              onLog?.(`📥 ${progressInfo.message}`)
+            }
           }
         }
       )
+
+      // Clear progress after download completes (or set to 100% if we had a known total)
+      // This ensures the progress bar doesn't stay stuck at 50%
+      onStatusUpdate('provisioning', undefined, 'Download complete', {
+        phase: 'download',
+        percentage: 100,
+        message: 'Download complete'
+      })
 
       onLog?.('✓ Moodle source downloaded successfully')
     } else {
@@ -249,7 +281,7 @@ export class LifecycleManager {
             headers: {
               'User-Agent': 'MoodleBox/1.0'
             }
-          } as any)
+          } as RequestInit)
 
           if (timeoutId) {
             clearTimeout(timeoutId)
@@ -262,7 +294,7 @@ export class LifecycleManager {
             // 303 is Moodle's redirect, which means it's up
             return
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           if (timeoutId) {
             clearTimeout(timeoutId)
             timeoutId = null

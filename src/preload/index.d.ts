@@ -46,7 +46,16 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
-  status: 'provisioning' | 'installing' | 'starting' | 'waiting' | 'ready' | 'stopped' | 'stopping' | 'deleting' | 'error'
+  status:
+    | 'provisioning'
+    | 'installing'
+    | 'starting'
+    | 'waiting'
+    | 'ready'
+    | 'stopped'
+    | 'stopping'
+    | 'deleting'
+    | 'error'
   path: string
   createdAt: string
   lastUsed?: string

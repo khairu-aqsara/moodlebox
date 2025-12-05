@@ -293,6 +293,8 @@ export class MoodleInstaller {
           // This is different from Moodle's config.php which uses 'db' (service name) because
           // Moodle runs in a different container and connects via Docker network.
           // Using localhost is more reliable cross-platform (especially on Windows).
+          // Use SHOW TABLES instead of SELECT to avoid errors when table doesn't exist
+          // This query returns empty result set instead of error if table doesn't exist
           const args = [
             'compose',
             'exec',
@@ -307,7 +309,7 @@ export class MoodleInstaller {
             'moodle',
             'moodle',
             '-e',
-            'SELECT COUNT(*) FROM mdl_config;'
+            "SHOW TABLES LIKE 'mdl_config';"
           ]
 
           const proc = spawn('docker', args, {
@@ -328,13 +330,24 @@ export class MoodleInstaller {
           })
 
           proc.on('close', (code) => {
-            // If query succeeds, database tables exist (installed)
-            // If it fails, tables don't exist (not installed)
-            if (code === 0 && output.includes('COUNT')) {
-              resolve(true)
+            // SHOW TABLES returns empty result if table doesn't exist (no error)
+            // If query succeeds and output contains 'mdl_config', table exists (installed)
+            if (code === 0) {
+              // Check if the output contains the table name (table exists)
+              // SHOW TABLES output format: "Tables_in_moodle (mdl_config)" or just "mdl_config"
+              const hasTable = output.includes('mdl_config') && output.trim().length > 0
+              if (hasTable) {
+                log.debug('Moodle is already installed (mdl_config table exists)')
+                resolve(true)
+              } else {
+                log.debug('Moodle not installed yet (mdl_config table does not exist)')
+                resolve(false)
+              }
             } else {
-              // Log error for debugging but don't fail - assume not installed
-              log.debug(`isInstalled check failed: code=${code}, output=${output}, error=${errorOutput}`)
+              // Query failed - log for debugging but assume not installed
+              log.debug(
+                `isInstalled check failed: code=${code}, output=${output}, error=${errorOutput}`
+              )
               resolve(false)
             }
           })

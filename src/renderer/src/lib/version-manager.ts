@@ -17,23 +17,23 @@ class VersionManager {
     this.data = result.data
   }
 
-  getAllVersions() {
+  getAllVersions(): VersionsData['releases'] {
     return this.data.releases
   }
 
-  getVersionByNumber(version: string) {
+  getVersionByNumber(version: string): VersionsData['releases'][0] | undefined {
     return this.data.releases.find((r) => r.version === version)
   }
 
-  getLatestVersion() {
+  getLatestVersion(): VersionsData['releases'][0] {
     return this.data.releases[0]
   }
 
-  getLTSVersions() {
+  getLTSVersions(): VersionsData['releases'] {
     return this.data.releases.filter((r) => r.type === 'lts')
   }
 
-  getLastUpdate() {
+  getLastUpdate(): string {
     return this.data.latest_update
   }
 }

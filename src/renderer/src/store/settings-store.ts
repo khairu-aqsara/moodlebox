@@ -26,7 +26,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         workspaceFolder: settings.workspaceFolder,
         phpMyAdminPort: settings.phpMyAdminPort
       })
-    } catch (error) {
+    } catch {
       // Settings loading failed - use defaults
       // In production, consider showing a toast notification
     } finally {
@@ -48,20 +48,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         workspaceFolder: saved.workspaceFolder,
         phpMyAdminPort: saved.phpMyAdminPort
       })
-    } catch (error) {
+    } catch {
       // Settings update failed - revert to previous state
       // In production, consider showing a toast notification
       set(current)
     }
   },
 
-  selectFolder: async () => {
+  selectFolder: async (): Promise<void> => {
     try {
       const folder = await window.api.settings.selectFolder()
       if (folder) {
         await get().updateSettings({ workspaceFolder: folder })
       }
-    } catch (error) {
+    } catch {
       // Folder selection cancelled or failed - silently ignore
       // User can try again if needed
     }

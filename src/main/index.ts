@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { renameSync, existsSync, mkdirSync } from 'fs'
 import icon from '../../build/icon.png?asset'
 import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
@@ -13,16 +14,14 @@ log.transports.console.level = app.isPackaged ? 'warn' : 'debug' // Only show wa
 
 // Configure log file settings
 log.transports.file.maxSize = 10 * 1024 * 1024 // 10MB max file size
-log.transports.file.archiveLogFn = (oldLogFile) => {
+log.transports.file.archiveLogFn = (oldLogFile): string => {
   // Archive old logs with timestamp
-  const path = require('path')
-  const fs = require('fs')
   const logPath = typeof oldLogFile === 'string' ? oldLogFile : oldLogFile.path
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const archivePath = path.join(path.dirname(logPath), `main-${timestamp}.log`)
+  const archivePath = join(dirname(logPath), `main-${timestamp}.log`)
   try {
-    fs.renameSync(logPath, archivePath)
-  } catch (error) {
+    renameSync(logPath, archivePath)
+  } catch {
     // Ignore errors during archiving
   }
   return archivePath
@@ -40,9 +39,8 @@ function configureLogLocation(): void {
     const logFile = join(logsFolder, 'main.log')
 
     // Ensure logs directory exists
-    const fs = require('fs')
-    if (!fs.existsSync(logsFolder)) {
-      fs.mkdirSync(logsFolder, { recursive: true })
+    if (!existsSync(logsFolder)) {
+      mkdirSync(logsFolder, { recursive: true })
     }
 
     // Update log file location
@@ -135,7 +133,7 @@ function createWindow(): BrowserWindow {
 }
 
 // IPC Handlers
-function setupIPCHandlers() {
+function setupIPCHandlers(): void {
   // Get all projects
   ipcMain.handle('projects:getAll', () => {
     return projectService.getAllProjects()
@@ -206,7 +204,6 @@ function setupIPCHandlers() {
   // Open log file location in file manager
   ipcMain.handle('app:openLogFolder', () => {
     const logPath = log.transports.file.getFile().path
-    const { dirname } = require('path')
     const logDir = dirname(logPath)
     shell.openPath(logDir)
   })
@@ -259,9 +256,9 @@ app.whenReady().then(async () => {
     log.info('='.repeat(60))
 
     // App window optimizations for macOS - handle Cmd+Q
-    app.on('browser-window-created', (_, window) => {
+    app.on('browser-window-created', (_, window): void => {
       if (process.platform === 'darwin') {
-        const handleBeforeInput = (_event: Electron.Event, input: Electron.Input) => {
+        const handleBeforeInput = (_event: Electron.Event, input: Electron.Input): void => {
           if (input.meta && input.key.toLowerCase() === 'q') {
             app.quit()
           }

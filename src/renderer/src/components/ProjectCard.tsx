@@ -1,5 +1,14 @@
 import { Project } from '../types'
-import { Play, Square, Trash2, FolderOpen, ExternalLink, RefreshCw, Database, FileText } from 'lucide-react'
+import {
+  Play,
+  Square,
+  Trash2,
+  FolderOpen,
+  ExternalLink,
+  RefreshCw,
+  Database,
+  FileText
+} from 'lucide-react'
 import { useProjectStore } from '../store/project-store'
 import { useSettingsStore } from '../store/settings-store'
 import { Button } from './ui/button'
@@ -30,7 +39,7 @@ const STATUS_CONFIG: Record<Project['status'], { color: string; symbol: string; 
   error: { color: 'text-red-500', symbol: '⚠️', text: 'Error' }
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project }: ProjectCardProps): JSX.Element {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [logsDialogOpen, setLogsDialogOpen] = useState(false)
   const [logs, setLogs] = useState<string>('')
@@ -42,14 +51,15 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const openBrowser = useProjectStore((state) => state.openBrowser)
   const phpMyAdminPort = useSettingsStore((state) => state.phpMyAdminPort)
 
-  const handleViewLogs = async () => {
+  const handleViewLogs = async (): Promise<void> => {
     setLogsDialogOpen(true)
     setLogsLoading(true)
     try {
       const projectLogs = await window.api.projects.getLogs(project.id)
       setLogs(projectLogs)
-    } catch (error: any) {
-      setLogs(`Error loading logs: ${error.message || 'Unknown error'}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setLogs(`Error loading logs: ${errorMessage}`)
     } finally {
       setLogsLoading(false)
     }
@@ -57,24 +67,30 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
   const statusConfig = STATUS_CONFIG[project.status]
 
-  const handleStart = () => startProject(project.id)
-  const handleStop = async () => {
+  const handleStart = (): void => {
+    startProject(project.id)
+  }
+  const handleStop = async (): Promise<void> => {
     await stopProject(project.id)
   }
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = (): void => {
     deleteProject(project.id)
     setDeleteDialogOpen(false)
   }
-  const handleOpenFolder = () => openFolder(project.path)
-  const handleOpenBrowser = () => openBrowser(project.port)
-  const handleOpenPhpMyAdmin = () => {
+  const handleOpenFolder = (): void => {
+    openFolder(project.path)
+  }
+  const handleOpenBrowser = (): void => {
+    openBrowser(project.port)
+  }
+  const handleOpenPhpMyAdmin = (): void => {
     window.open(`http://localhost:${phpMyAdminPort}`, '_blank')
   }
 
   return (
     <>
       <TooltipProvider delayDuration={300}>
-        <div 
+        <div
           className="border-b last:border-b-0 px-6 py-5 hover:bg-accent/50 transition-colors"
           role="article"
           aria-label={`Project ${project.name}, Moodle version ${project.moodleVersion}, status ${statusConfig.text}`}
@@ -83,7 +99,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
             {/* Left: Project Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
-                <span className={`text-lg ${statusConfig.color}`} aria-hidden="true">{statusConfig.symbol}</span>
+                <span className={`text-lg ${statusConfig.color}`} aria-hidden="true">
+                  {statusConfig.symbol}
+                </span>
                 <h3 className="font-semibold text-base truncate">
                   {project.name}{' '}
                   <span className="text-sm text-muted-foreground font-normal">
@@ -121,8 +139,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
                   )}
                 </div>
 
-                {/* Status detail message */}
+                {/* Status detail message - only show when progress is not available */}
                 {project.statusDetail &&
+                  !project.progress &&
                   project.status !== 'error' &&
                   project.status !== 'stopped' && (
                     <div className="text-sm text-muted-foreground italic">
@@ -131,18 +150,28 @@ export function ProjectCard({ project }: ProjectCardProps) {
                   )}
 
                 {/* Progress bar */}
-                {project.progress && project.progress.percentage !== undefined && (
+                {project.progress && (
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
-                        {project.progress.message || `${project.progress.percentage.toFixed(0)}%`}
+                        {project.progress.message ||
+                          (project.progress.percentage !== undefined
+                            ? `${project.progress.percentage.toFixed(0)}%`
+                            : 'Downloading...')}
                       </span>
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-primary h-full transition-all duration-300"
-                        style={{ width: `${project.progress.percentage}%` }}
-                      />
+                      {project.progress.percentage !== undefined ? (
+                        <div
+                          className="bg-primary h-full transition-all duration-300"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, project.progress.percentage))}%`
+                          }}
+                        />
+                      ) : (
+                        // Indeterminate progress bar (animated pulse at 50% to indicate unknown progress)
+                        <div className="bg-primary h-full animate-pulse" style={{ width: '50%' }} />
+                      )}
                     </div>
                   </div>
                 )}
@@ -168,9 +197,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
               {project.status === 'stopped' ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button 
-                      onClick={handleStart} 
-                      size="icon" 
+                    <Button
+                      onClick={handleStart}
+                      size="icon"
                       variant="outline"
                       aria-label={`Start project ${project.name}`}
                     >
@@ -197,15 +226,6 @@ export function ProjectCard({ project }: ProjectCardProps) {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Open phpMyAdmin</TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button onClick={handleViewLogs} size="icon" variant="outline">
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>View Logs</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -262,19 +282,27 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 <TooltipContent>Open Folder</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleViewLogs}
-                    size="icon"
-                    variant="outline"
-                    disabled={project.status === 'deleting'}
-                  >
-                    <FileText className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>View Logs</TooltipContent>
-              </Tooltip>
+              {/* Only show log button when containers are active */}
+              {(project.status === 'ready' ||
+                project.status === 'starting' ||
+                project.status === 'waiting' ||
+                project.status === 'installing' ||
+                project.status === 'provisioning' ||
+                project.status === 'stopping') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleViewLogs}
+                      size="icon"
+                      variant="outline"
+                      disabled={project.status === 'deleting'}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>View Logs</TooltipContent>
+                </Tooltip>
+              )}
 
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -296,32 +324,44 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
       {/* Logs Dialog */}
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl w-[90vw] h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle>Docker Logs - {project.name}</DialogTitle>
-            <DialogDescription>Container logs for debugging</DialogDescription>
+            <DialogDescription>Container logs for debugging and troubleshooting</DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="flex-1 min-h-0 px-6 pb-4 overflow-hidden flex flex-col">
             {logsLoading ? (
-              <div className="flex items-center justify-center p-8">
+              <div className="flex items-center justify-center p-12">
                 <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-muted-foreground">Loading logs...</span>
+                <span className="ml-3 text-muted-foreground">Loading logs...</span>
               </div>
             ) : (
-              <pre className="bg-muted p-4 rounded-md overflow-auto max-h-[60vh] text-xs font-mono whitespace-pre-wrap break-words">
-                {logs || 'No logs available'}
-              </pre>
+              <div className="relative flex-1 min-h-0 border border-border rounded-lg bg-muted/50 overflow-hidden flex flex-col">
+                <div className="absolute top-2 right-2 z-10">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(logs || '')
+                    }}
+                    className="h-7 text-xs bg-background/80 backdrop-blur-sm"
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 min-h-0">
+                  <pre className="text-sm font-mono whitespace-pre-wrap break-words leading-relaxed text-foreground">
+                    {logs || 'No logs available'}
+                  </pre>
+                </div>
+              </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 pb-6 pt-4 border-t flex-shrink-0">
             <Button variant="outline" onClick={() => setLogsDialogOpen(false)}>
               Close
             </Button>
-            <Button
-              onClick={handleViewLogs}
-              disabled={logsLoading}
-              variant="secondary"
-            >
+            <Button onClick={handleViewLogs} disabled={logsLoading} variant="secondary">
               <RefreshCw className={`h-4 w-4 mr-2 ${logsLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
@@ -335,8 +375,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <DialogHeader>
             <DialogTitle>Delete Project</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{project.name}"? This action cannot be undone and
-              will remove all project files.
+              Are you sure you want to delete &quot;{project.name}&quot;? This action cannot be
+              undone and will remove all project files.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

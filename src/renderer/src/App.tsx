@@ -3,7 +3,7 @@ import { Dashboard } from './components/Dashboard'
 import { NewProjectModal } from './components/NewProjectModal'
 import { useSettingsStore } from './store/settings-store'
 
-function App() {
+function App(): JSX.Element {
   const [showNewProject, setShowNewProject] = useState(false)
   const { theme, loadSettings } = useSettingsStore()
 
@@ -13,7 +13,7 @@ function App() {
 
   // Keyboard shortcuts
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       // Cmd+N or Ctrl+N: Create new project
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') {
         event.preventDefault()
@@ -21,7 +21,7 @@ function App() {
           setShowNewProject(true)
         }
       }
-      
+
       // Escape: Close modals
       if (event.key === 'Escape' && showNewProject) {
         setShowNewProject(false)

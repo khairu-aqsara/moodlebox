@@ -60,13 +60,50 @@ cd ezadevbox
 # Install dependencies
 npm install
 
+# Regenerate icons (if updating icon design)
+npm run icons
+
 # Build for your platform
 npm run build:win   # Windows
 npm run build:mac   # macOS
 npm run build:linux # Linux
 ```
 
-Built applications are located in the `out/` directory.
+Built applications are located in the `dist/` directory.
+
+#### 🔧 Troubleshooting: Icon Not Updating
+
+If the app icon doesn't update after rebuilding:
+
+1. **Regenerate icons**:
+   ```bash
+   npm run icons
+   ```
+   This generates `build/icon-source.png` and then creates platform-specific icons.
+
+2. **Clear Electron Builder cache**:
+   ```bash
+   # macOS/Linux
+   npm run clean:cache
+   
+   # Windows
+   npm run clean:cache:win
+   ```
+   Or manually delete:
+   - **macOS**: `~/Library/Caches/electron-builder`
+   - **Linux**: `~/.cache/electron-builder`
+   - **Windows**: `%USERPROFILE%\AppData\Local\electron-builder`
+
+3. **Rebuild**:
+   ```bash
+   npm run build:mac  # or build:win/build:linux
+   ```
+
+The icon files are located in `build/`:
+- `icon.icns` - macOS (required)
+- `icon.ico` - Windows (required)
+- `icon.png` - Linux (required)
+- `icon-source.png` - Source image (1024x1024 PNG)
 
 ---
 

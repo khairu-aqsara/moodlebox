@@ -61,7 +61,7 @@ let logListenerCleanup: (() => void) | null = null
 let updateListenerCleanup: (() => void) | null = null
 
 // Listen for project updates from main process
-const setupIPCListeners = () => {
+const setupIPCListeners = (): void => {
   // Clean up existing listeners if any
   if (logListenerCleanup) logListenerCleanup()
   if (updateListenerCleanup) updateListenerCleanup()

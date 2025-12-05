@@ -8,7 +8,7 @@ interface SettingsModalProps {
   onClose: () => void
 }
 
-export function SettingsModal({ onClose }: SettingsModalProps) {
+export function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
   const { theme, workspaceFolder, phpMyAdminPort, updateSettings, selectFolder } =
     useSettingsStore()
   const [localTheme, setLocalTheme] = useState(theme)
@@ -23,7 +23,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   // Handle Escape key to close modal
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         onClose()
       }
@@ -34,7 +34,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }, [onClose])
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     await updateSettings({
       theme: localTheme,
       workspaceFolder: localFolder,
@@ -43,7 +43,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     onClose()
   }
 
-  const handleBrowse = async () => {
+  const handleBrowse = async (): Promise<void> => {
     await selectFolder()
     // Update local state with the new folder
     setLocalFolder(useSettingsStore.getState().workspaceFolder)

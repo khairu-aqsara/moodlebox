@@ -12,7 +12,7 @@ interface DashboardProps {
   onNewProject: () => void
 }
 
-export function Dashboard({ onNewProject }: DashboardProps) {
+export function Dashboard({ onNewProject }: DashboardProps): JSX.Element {
   const projects = useProjectStore((state) => state.projects)
   const loadProjects = useProjectStore((state) => state.loadProjects)
   const [isFabOpen, setIsFabOpen] = useState(false)
@@ -23,7 +23,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [versionFilter, setVersionFilter] = useState<string>('all')
 
-  const checkDocker = async () => {
+  const checkDocker = async (): Promise<void> => {
     // Prevent multiple simultaneous checks
     if (isCheckingDocker) return
 
@@ -31,7 +31,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
     try {
       const isRunning = await window.api.projects.checkDocker()
       setDockerError(!isRunning)
-    } catch (err) {
+    } catch {
       // Docker check failed - assume Docker is not available
       setDockerError(true)
     } finally {
@@ -47,18 +47,18 @@ export function Dashboard({ onNewProject }: DashboardProps) {
     // This handles the case where Docker was started after app launch
     // or containers were started/stopped outside the app
     // Note: syncStates() is now debounced on the backend, so multiple calls are safe
-    const syncOnFocus = async () => {
+    const syncOnFocus = async (): Promise<void> => {
       try {
         await window.api.projects.syncStates()
         await loadProjects() // Reload to get updated states
-      } catch (err) {
+      } catch {
         // Silently fail - sync happens on startup anyway
       }
     }
 
     // Debounce Docker check and sync on focus to avoid excessive checks
     let focusTimeout: NodeJS.Timeout | null = null
-    const onFocus = () => {
+    const onFocus = (): void => {
       if (focusTimeout) {
         clearTimeout(focusTimeout)
       }
@@ -78,7 +78,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const toggleFab = () => setIsFabOpen(!isFabOpen)
+  const toggleFab = (): void => setIsFabOpen(!isFabOpen)
 
   // Memoize filtered projects - must be at top level, not conditional
   const filteredProjects = useMemo(() => {
@@ -111,7 +111,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
   return (
     <div className="flex flex-col h-full relative">
       {/* Modern Glassmorphic Header */}
-      <header 
+      <header
         className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60"
         role="banner"
       >
@@ -124,9 +124,9 @@ export function Dashboard({ onNewProject }: DashboardProps) {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-6 pb-32" role="main">
+      <main className="flex-1 overflow-hidden flex flex-col px-4 py-6 pb-32" role="main">
         {dockerError ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center flex-1 text-center">
             <div className="max-w-md">
               <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-destructive/15">
                 <AlertTriangle className="h-10 w-10 text-destructive" />
@@ -148,7 +148,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
                   {isCheckingDocker ? 'Checking...' : 'Retry Connection'}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Don't have Docker?{' '}
+                  Don&apos;t have Docker?{' '}
                   <a
                     href="#"
                     onClick={(e) => {
@@ -164,7 +164,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
             </div>
           </div>
         ) : projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center flex-1 text-center">
             <div className="max-w-md">
               <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
               <p className="text-muted-foreground mb-6">
@@ -177,8 +177,8 @@ export function Dashboard({ onNewProject }: DashboardProps) {
             </div>
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="max-w-6xl mx-auto flex flex-col h-full w-full">
+            <div className="flex items-center justify-between mb-6 flex-shrink-0">
               <h2 className="text-lg font-semibold tracking-tight">Active Projects</h2>
               <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
                 {projects.length} {projects.length === 1 ? 'Project' : 'Projects'}
@@ -186,7 +186,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
             </div>
 
             {/* Search and Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 mb-6 flex-shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -240,31 +240,35 @@ export function Dashboard({ onNewProject }: DashboardProps) {
             </div>
 
             {/* Filtered Projects */}
-            {filteredProjects.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-sm">No projects match your filters.</p>
-                {(searchQuery || statusFilter !== 'all' || versionFilter !== 'all') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => {
-                      setSearchQuery('')
-                      setStatusFilter('all')
-                      setVersionFilter('all')
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {filteredProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} />
-                ))}
-              </div>
-            )}
+            <div className="flex-1 min-h-0">
+              {filteredProjects.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p className="text-sm">No projects match your filters.</p>
+                  {(searchQuery || statusFilter !== 'all' || versionFilter !== 'all') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        setSearchQuery('')
+                        setStatusFilter('all')
+                        setVersionFilter('all')
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-y-auto overflow-x-hidden h-full custom-scrollbar">
+                  <div className="grid gap-4 pr-2">
+                    {filteredProjects.map((project) => (
+                      <ProjectCard key={project.id} project={project} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
