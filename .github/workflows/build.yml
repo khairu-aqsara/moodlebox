@@ -52,8 +52,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Clear npm cache
+        run: npm cache clean --force
+        continue-on-error: true
+
       - name: Install dependencies
-        run: npm install
+        run: npm install --prefer-offline --no-audit
 
       - name: Build application
         run: npx electron-vite build
