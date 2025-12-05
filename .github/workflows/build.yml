@@ -52,12 +52,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Clear npm cache
-        run: npm cache clean --force
-        continue-on-error: true
-
-      - name: Install dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Clean install (fix npm optional dependencies bug)
+        run: |
+          Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
+          Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+          npm install
 
       - name: Build application
         run: npx electron-vite build
