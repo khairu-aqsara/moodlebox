@@ -1,6 +1,6 @@
 {
   "name": "moodlebox",
-  "version": "1.0.11.3",
+  "version": "1.0.11.4",
   "description": "A local Moodle development environment for everyone",
   "main": "./out/main/index.js",
   "author": "example.com",
