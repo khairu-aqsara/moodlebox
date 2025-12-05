@@ -80,6 +80,34 @@ export function Dashboard({ onNewProject }: DashboardProps) {
 
   const toggleFab = () => setIsFabOpen(!isFabOpen)
 
+  // Memoize filtered projects - must be at top level, not conditional
+  const filteredProjects = useMemo(() => {
+    let filtered = projects
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.moodleVersion.toLowerCase().includes(query) ||
+          p.path.toLowerCase().includes(query)
+      )
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((p) => p.status === statusFilter)
+    }
+
+    // Version filter
+    if (versionFilter !== 'all') {
+      filtered = filtered.filter((p) => p.moodleVersion === versionFilter)
+    }
+
+    return filtered
+  }, [projects, searchQuery, statusFilter, versionFilter])
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Modern Glassmorphic Header */}
@@ -212,32 +240,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
             </div>
 
             {/* Filtered Projects */}
-            {useMemo(() => {
-              let filtered = projects
-
-              // Search filter
-              if (searchQuery.trim()) {
-                const query = searchQuery.toLowerCase()
-                filtered = filtered.filter(
-                  (p) =>
-                    p.name.toLowerCase().includes(query) ||
-                    p.moodleVersion.toLowerCase().includes(query) ||
-                    p.path.toLowerCase().includes(query)
-                )
-              }
-
-              // Status filter
-              if (statusFilter !== 'all') {
-                filtered = filtered.filter((p) => p.status === statusFilter)
-              }
-
-              // Version filter
-              if (versionFilter !== 'all') {
-                filtered = filtered.filter((p) => p.moodleVersion === versionFilter)
-              }
-
-              return filtered
-            }, [projects, searchQuery, statusFilter, versionFilter]).length === 0 ? (
+            {filteredProjects.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p className="text-sm">No projects match your filters.</p>
                 {(searchQuery || statusFilter !== 'all' || versionFilter !== 'all') && (
@@ -257,29 +260,7 @@ export function Dashboard({ onNewProject }: DashboardProps) {
               </div>
             ) : (
               <div className="grid gap-4">
-                {useMemo(() => {
-                  let filtered = projects
-
-                  if (searchQuery.trim()) {
-                    const query = searchQuery.toLowerCase()
-                    filtered = filtered.filter(
-                      (p) =>
-                        p.name.toLowerCase().includes(query) ||
-                        p.moodleVersion.toLowerCase().includes(query) ||
-                        p.path.toLowerCase().includes(query)
-                    )
-                  }
-
-                  if (statusFilter !== 'all') {
-                    filtered = filtered.filter((p) => p.status === statusFilter)
-                  }
-
-                  if (versionFilter !== 'all') {
-                    filtered = filtered.filter((p) => p.moodleVersion === versionFilter)
-                  }
-
-                  return filtered
-                }, [projects, searchQuery, statusFilter, versionFilter]).map((project) => (
+                {filteredProjects.map((project) => (
                   <ProjectCard key={project.id} project={project} />
                 ))}
               </div>
