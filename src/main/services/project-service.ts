@@ -204,7 +204,8 @@ export class ProjectService {
     // Parallelize Docker status checks for better performance
     const syncPromises = projects.map(async (project) => {
       try {
-        // Skip syncing projects that are in active operations
+        // CRITICAL: Skip syncing projects that are in active operations FIRST
+        // This must be checked BEFORE any file system operations to prevent interference
         // These operations should not be interrupted by sync, as they represent running processes
         // (downloads, installations, container operations, etc.)
         if (this.ACTIVE_OPERATION_STATUSES.includes(project.status)) {
@@ -214,7 +215,75 @@ export class ProjectService {
           return
         }
 
-        // Check if project folder exists
+        // CRITICAL: Check for download/extraction indicators BEFORE any file system operations
+        // This prevents sync from interfering even if status hasn't been updated yet
+        // We use a try-catch with minimal file operations to detect active downloads/extractions
+        let skipSync = false
+        try {
+          // Check 1: Look for download state files (indicates active download/extraction)
+          // Use minimal file operations - only check if files exist, don't read them
+          const tempDir = join(project.path, '.tmp')
+          const downloadStatePath = join(tempDir, 'download-state.json')
+          const partialDownloadPath = join(tempDir, 'moodle.zip.partial')
+
+          // Use Promise.allSettled to avoid one failure blocking the other check
+          const [stateCheck, partialCheck] = await Promise.allSettled([
+            fs
+              .access(downloadStatePath)
+              .then(() => true)
+              .catch(() => false),
+            fs
+              .access(partialDownloadPath)
+              .then(() => true)
+              .catch(() => false)
+          ])
+
+          const stateExists = stateCheck.status === 'fulfilled' && stateCheck.value === true
+          const partialExists = partialCheck.status === 'fulfilled' && partialCheck.value === true
+
+          if (stateExists || partialExists) {
+            log.debug(
+              `Skipping sync for project ${project.name} - download state files detected (download/extraction in progress)`
+            )
+            skipSync = true
+          }
+        } catch {
+          // Error checking - continue with other checks
+        }
+
+        // Check 2: Check if Moodle extraction is incomplete (only if first check didn't skip)
+        if (!skipSync) {
+          try {
+            const moodleCodePath = join(project.path, 'moodlecode')
+            const configDistPath = join(moodleCodePath, 'config-dist.php')
+
+            // Check if moodlecode directory exists
+            const moodleCodeStats = await fs.stat(moodleCodePath).catch(() => null)
+            if (moodleCodeStats?.isDirectory()) {
+              // Directory exists - check if extraction is complete
+              const configExists = await fs
+                .access(configDistPath)
+                .then(() => true)
+                .catch(() => false)
+              if (!configExists) {
+                // config-dist.php doesn't exist - extraction is likely in progress or incomplete
+                log.debug(
+                  `Skipping sync for project ${project.name} - moodlecode directory exists but config-dist.php not found (extraction may be in progress)`
+                )
+                skipSync = true
+              }
+            }
+          } catch {
+            // Error checking - continue with other checks
+          }
+        }
+
+        // If we detected active download/extraction, skip all further operations
+        if (skipSync) {
+          return
+        }
+
+        // Now safe to check project folder (after confirming no active operations)
         try {
           await fs.access(project.path)
         } catch {
@@ -226,7 +295,37 @@ export class ProjectService {
           return
         }
 
+        // Check if docker-compose.yml exists before running Docker commands
+        // This prevents Docker from accessing files in directories where extraction might be happening
+        // CRITICAL: If docker-compose.yml doesn't exist, containers cannot exist, so skip entirely
+        const composePath = join(project.path, 'docker-compose.yml')
+        let composeExists = false
+        try {
+          await fs.access(composePath)
+          composeExists = true
+        } catch {
+          // docker-compose.yml doesn't exist - project might be in early setup phase
+          // Since containers cannot exist without docker-compose.yml, skip all Docker operations
+          // This prevents Docker from reading the directory structure during extraction
+          log.debug(
+            `Skipping Docker sync for project ${project.name} - docker-compose.yml not found (project may be in setup, no containers possible)`
+          )
+          return
+        }
+
+        // Only proceed with Docker operations if docker-compose.yml exists
+        // This ensures Docker won't interfere with file operations
+        if (!composeExists) {
+          return
+        }
+
         // Check actual container status
+        // At this point, we've confirmed:
+        // 1. Project is not in active operation status
+        // 2. No download/extraction files detected
+        // 3. Extraction appears complete (if moodlecode exists)
+        // 4. docker-compose.yml exists
+        // It should be safe to run Docker commands
         log.debug(`Checking container status for project ${project.name} at path: ${project.path}`)
         const containerStatus = await this.dockerService.getProjectContainerStatus(project.path)
         log.debug(
