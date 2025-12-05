@@ -5,6 +5,7 @@ import { DockerService } from './docker-service'
 import fetch from 'node-fetch'
 import log from 'electron-log'
 import { getAssetPath } from '../utils/asset-path'
+import { HTTP_WAIT } from '../constants'
 
 export class LifecycleManager {
   private downloader: MoodleDownloader
@@ -274,8 +275,8 @@ export class LifecycleManager {
           }
         }
 
-        // Wait 2 seconds before next check
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        // Wait before next check
+        await new Promise((resolve) => setTimeout(resolve, HTTP_WAIT.RETRY_INTERVAL_MS))
       }
 
       throw new Error(`Timeout waiting for Moodle to respond at ${url} after ${attempts} attempts`)

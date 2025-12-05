@@ -37,6 +37,7 @@ const api = {
     start: (id: string) => ipcRenderer.invoke('projects:start', id),
     stop: (id: string) => ipcRenderer.invoke('projects:stop', id),
     delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
+    duplicate: (id: string, newName: string, newPort: number) => ipcRenderer.invoke('projects:duplicate', id, newName, newPort),
     openFolder: (path: string) => ipcRenderer.invoke('projects:openFolder', path),
     openBrowser: (port: number) => ipcRenderer.invoke('projects:openBrowser', port),
     getDefaultPath: () => ipcRenderer.invoke('projects:getDefaultPath'),
@@ -57,7 +58,8 @@ const api = {
       }
     },
     checkDocker: () => ipcRenderer.invoke('projects:checkDocker'),
-    syncStates: () => ipcRenderer.invoke('projects:syncStates')
+    syncStates: () => ipcRenderer.invoke('projects:syncStates'),
+    getLogs: (id: string) => ipcRenderer.invoke('projects:getLogs', id)
   },
   app: {
     getLogPath: () => ipcRenderer.invoke('app:getLogPath'),

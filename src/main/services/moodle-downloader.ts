@@ -3,6 +3,10 @@ import extract from 'extract-zip'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import log from 'electron-log'
+import {
+  DOWNLOAD,
+  FILE_OPS
+} from '../constants'
 
 interface DownloadState {
   url: string
@@ -12,12 +16,104 @@ interface DownloadState {
 }
 
 export class MoodleDownloader {
-  private readonly BUFFER_SIZE = 1024 * 1024 // 1MB buffer for Windows optimization
-  private readonly STATE_SAVE_INTERVAL = 5 * 1024 * 1024 // Save state every 5MB
+  private readonly BUFFER_SIZE = DOWNLOAD.BUFFER_SIZE
+  private readonly STATE_SAVE_INTERVAL = DOWNLOAD.STATE_SAVE_INTERVAL
   private readonly isWindows = process.platform === 'win32'
+  private readonly MAX_RETRIES = DOWNLOAD.MAX_RETRIES
+  private readonly INITIAL_RETRY_DELAY = DOWNLOAD.INITIAL_RETRY_DELAY_MS
+  private readonly PROGRESS_THROTTLE_MS = DOWNLOAD.PROGRESS_THROTTLE_MS
+
+  /**
+   * Check if an error is transient and retryable
+   */
+  private isRetryableError(error: any): boolean {
+    if (!error) return false
+    
+    // Network errors that are typically transient
+    const retryableErrors = [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'ECONNREFUSED',
+      'EAI_AGAIN',
+      'NetworkError',
+      'Failed to fetch',
+      'fetch failed'
+    ]
+    
+    const errorMessage = (error.message || String(error)).toLowerCase()
+    const errorCode = error.code || ''
+    
+    return (
+      retryableErrors.some(err => errorMessage.includes(err.toLowerCase()) || errorCode.includes(err)) ||
+      error.name === 'AbortError' ||
+      (error.status && error.status >= 500) // Server errors
+    )
+  }
+
+  /**
+   * Retry a function with exponential backoff
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    operation: string,
+    maxRetries: number = this.MAX_RETRIES
+  ): Promise<T> {
+    let lastError: any
+    let delay = this.INITIAL_RETRY_DELAY
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn()
+      } catch (error: any) {
+        lastError = error
+        
+        // Don't retry if it's not a retryable error or if we've exhausted retries
+        if (!this.isRetryableError(error) || attempt === maxRetries) {
+          throw error
+        }
+
+        // Calculate exponential backoff delay: 1s, 2s, 4s, etc.
+        delay = this.INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+        log.warn(
+          `${operation} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`,
+          error.message
+        )
+        
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
+    throw lastError
+  }
 
   /**
    * Download Moodle source code from URL and extract to destination
+   * 
+   * Downloads Moodle source code with the following features:
+   * - **Resume support**: Automatically resumes interrupted downloads
+   * - **Progress tracking**: Reports download progress via callback
+   * - **Retry logic**: Exponential backoff retry for transient network errors
+   * - **Adaptive timeouts**: Only times out on inactivity, not slow connections
+   * - **Windows optimization**: Buffered writes for better Windows performance
+   * 
+   * **Download state is preserved** in `.tmp/download-state.json` for resume capability.
+   * 
+   * @param url - URL to download Moodle from (typically GitHub release)
+   * @param destination - Directory where Moodle will be extracted
+   * @param onProgress - Optional callback for progress updates (percentage, downloaded bytes, total bytes)
+   * @throws {Error} If download fails, times out, or extraction fails
+   * 
+   * @example
+   * ```typescript
+   * await downloader.download(
+   *   'https://github.com/moodle/moodle/archive/v5.1.zip',
+   *   '/path/to/project',
+   *   (percentage, downloaded, total) => {
+   *     console.log(`Downloaded: ${percentage}%`)
+   *   }
+   * )
+   * ```
    */
   async download(
     url: string,
@@ -47,13 +143,18 @@ export class MoodleDownloader {
           // Verify URL matches (in case user changed version)
           if (parsedState.url === url) {
             const stat = await fs.stat(partialPath)
-            if (stat.size === parsedState.downloadedBytes && parsedState.downloadedBytes > 0) {
+            // Allow small size differences (up to 1MB) due to buffering/flushing
+            const sizeDiff = Math.abs(stat.size - parsedState.downloadedBytes)
+            const allowedDiff = 1024 * 1024 // 1MB tolerance
+            
+            if (sizeDiff <= allowedDiff && parsedState.downloadedBytes > 0) {
               existingState = parsedState
-              startByte = parsedState.downloadedBytes
+              // Use actual file size as source of truth (may be slightly ahead due to buffering)
+              startByte = stat.size
               totalSize = parsedState.totalSize
               log.info(`Resuming download from byte ${startByte} (${(startByte / 1024 / 1024).toFixed(1)}MB)`)
             } else {
-              log.warn('Partial file size mismatch, starting fresh download')
+              log.warn(`Partial file size mismatch (file: ${stat.size}, state: ${parsedState.downloadedBytes}), starting fresh download`)
               await this.cleanupPartialDownload(partialPath, statePath)
             }
           } else {
@@ -71,8 +172,8 @@ export class MoodleDownloader {
 
     // Adaptive timeout: Only timeout if no data received for inactivity period
     // This allows slow connections to take as long as needed
-    const INACTIVITY_TIMEOUT = 5 * 60 * 1000 // 5 minutes of no data = timeout
-    const MAX_DOWNLOAD_TIME = 60 * 60 * 1000 // Absolute maximum: 60 minutes (safety net)
+    const INACTIVITY_TIMEOUT = DOWNLOAD.INACTIVITY_TIMEOUT_MS
+    const MAX_DOWNLOAD_TIME = DOWNLOAD.MAX_DOWNLOAD_TIME_MS
     
     let inactivityTimeout: NodeJS.Timeout | null = null
     let maxTimeTimeout: NodeJS.Timeout | null = null
@@ -117,23 +218,39 @@ export class MoodleDownloader {
         }
       }
 
+      // Save initial state immediately (even at 0 bytes) to track download attempts
+      // This ensures we can resume even if download fails very early
+      if (startByte === 0) {
+        await saveDownloadState(0, 0)
+      }
+
       try {
-        // Build headers with compression and resume support
-        const headers: Record<string, string> = {
-          'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
-          'Accept-Encoding': 'gzip, deflate, br'
-        }
+        // Wrap fetch in retry logic for transient network errors
+        const response = await this.retryWithBackoff(async () => {
+          // Build headers with compression and resume support
+          const headers: Record<string, string> = {
+            'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+            'Accept-Encoding': 'gzip, deflate, br'
+          }
 
-        // Add Range header if resuming
-        if (startByte > 0) {
-          headers['Range'] = `bytes=${startByte}-`
-          log.info(`Requesting download resume from byte ${startByte}`)
-        }
+          // Add Range header if resuming
+          if (startByte > 0) {
+            headers['Range'] = `bytes=${startByte}-`
+            log.info(`Requesting download resume from byte ${startByte}`)
+          }
 
-        const response = await fetch(url, {
-          headers,
-          signal: controller.signal
-        })
+          const fetchResponse = await fetch(url, {
+            headers,
+            signal: controller.signal
+          })
+          
+          // Check for server errors that might be transient
+          if (!fetchResponse.ok && fetchResponse.status >= 500) {
+            throw new Error(`Server error: ${fetchResponse.status} ${fetchResponse.statusText}`)
+          }
+          
+          return fetchResponse
+        }, 'Download fetch')
 
         // Handle different response statuses
         if (response.status === 206 && startByte > 0) {
@@ -144,14 +261,22 @@ export class MoodleDownloader {
           log.warn('Server returned 416 (Range Not Satisfiable), restarting download')
           await this.cleanupPartialDownload(partialPath, statePath)
           startByte = 0
-          // Retry without Range header
-          const retryResponse = await fetch(url, {
-            headers: {
-              'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
-              'Accept-Encoding': 'gzip, deflate, br'
-            },
-            signal: controller.signal
-          })
+          // Retry without Range header (with exponential backoff)
+          const retryResponse = await this.retryWithBackoff(async () => {
+            const retryFetchResponse = await fetch(url, {
+              headers: {
+                'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+                'Accept-Encoding': 'gzip, deflate, br'
+              },
+              signal: controller.signal
+            })
+            
+            if (!retryFetchResponse.ok && retryFetchResponse.status >= 500) {
+              throw new Error(`Server error: ${retryFetchResponse.status} ${retryFetchResponse.statusText}`)
+            }
+            
+            return retryFetchResponse
+          }, 'Download retry after 416')
           if (!retryResponse.ok) {
             throw new Error(
               `Failed to download Moodle: ${retryResponse.status} ${retryResponse.statusText}\n\n` +
@@ -249,6 +374,11 @@ export class MoodleDownloader {
         // If resuming and we don't have total size, use existing state
         if (totalSize === 0 && existingState) {
           totalSize = existingState.totalSize
+        }
+
+        // Update state with total size once we know it (if we didn't have it before)
+        if (totalSize > 0 && (startByte === 0 || !existingState || existingState.totalSize === 0)) {
+          await saveDownloadState(0, totalSize)
         }
 
         // Stream download to file with proper error handling
@@ -431,6 +561,7 @@ export class MoodleDownloader {
     let downloadedSize = 0
     let writeBuffer = Buffer.alloc(0)
     let lastStateSave = 0 // Track last saved position for state persistence
+    let lastProgressUpdate = 0 // Track last progress update time for throttling
 
     const flushBuffer = async (force = false) => {
       if (writeBuffer.length >= this.BUFFER_SIZE || (force && writeBuffer.length > 0)) {
@@ -476,7 +607,10 @@ export class MoodleDownloader {
           lastStateSave = downloadedSize
         }
 
-        if (onProgress && totalSize > 0) {
+        // Throttle progress updates to reduce IPC overhead (max 10 updates per second)
+        const now = Date.now()
+        if (onProgress && totalSize > 0 && (now - lastProgressUpdate >= this.PROGRESS_THROTTLE_MS || downloadedSize === 0)) {
+          lastProgressUpdate = now
           const totalDownloaded = downloadedSize + startByte
           const percentage = (totalDownloaded / totalSize) * 100
           const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60)
@@ -526,7 +660,7 @@ export class MoodleDownloader {
    * Safely move a file or directory, handling cross-device links and Windows locking
    * Enhanced with retry logic and exponential backoff for Windows
    */
-  private async safeMove(source: string, dest: string, retries = 3): Promise<void> {
+  private async safeMove(source: string, dest: string, retries = FILE_OPS.MOVE_RETRIES): Promise<void> {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         await fs.rename(source, dest)
@@ -536,7 +670,7 @@ export class MoodleDownloader {
           // Cross-device move or locked file - copy and delete
           // On Windows, wait with exponential backoff before retrying
           if (this.isWindows && attempt < retries - 1) {
-            const backoffMs = Math.min(100 * Math.pow(2, attempt), 1000)
+            const backoffMs = Math.min(FILE_OPS.WINDOWS_BACKOFF_BASE_MS * Math.pow(2, attempt), 1000)
             log.debug(`File locked, retrying move in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`)
             await new Promise(resolve => setTimeout(resolve, backoffMs))
             continue
@@ -549,7 +683,7 @@ export class MoodleDownloader {
           return
         } else if (this.isWindows && (error.code === 'ENOENT' || error.code === 'EACCES') && attempt < retries - 1) {
           // Windows-specific: file may be temporarily locked by antivirus
-          const backoffMs = Math.min(200 * Math.pow(2, attempt), 2000)
+          const backoffMs = Math.min(FILE_OPS.WINDOWS_BACKOFF_BASE_MS * 2 * Math.pow(2, attempt), 2000)
           log.debug(`File access error, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`)
           await new Promise(resolve => setTimeout(resolve, backoffMs))
           continue
@@ -564,7 +698,7 @@ export class MoodleDownloader {
    * Safely remove a directory with retries and exponential backoff
    * Enhanced for Windows file locking issues
    */
-  private async safeRemove(path: string, retries = 5): Promise<void> {
+  private async safeRemove(path: string, retries = FILE_OPS.REMOVE_RETRIES): Promise<void> {
     for (let i = 0; i < retries; i++) {
       try {
         await fs.rm(path, { recursive: true, force: true })
@@ -579,7 +713,7 @@ export class MoodleDownloader {
           throw error
         }
         // Exponential backoff with longer delays on Windows
-        const baseDelay = this.isWindows ? 200 : 100
+        const baseDelay = this.isWindows ? FILE_OPS.WINDOWS_BACKOFF_BASE_MS : FILE_OPS.NON_WINDOWS_BACKOFF_BASE_MS
         const backoffMs = baseDelay * Math.pow(2, i)
         log.debug(`Retrying directory removal in ${backoffMs}ms (attempt ${i + 1}/${retries})`)
         await new Promise<void>((resolve) => {

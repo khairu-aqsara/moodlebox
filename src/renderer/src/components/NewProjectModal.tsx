@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { z } from 'zod'
 import { versionManager } from '../lib/version-manager'
 import { useProjectStore } from '../store/project-store'
 import { useSettingsStore } from '../store/settings-store'
@@ -19,10 +20,27 @@ interface NewProjectModalProps {
   onClose: () => void
 }
 
+// Validation schema for project creation
+const projectSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Project name is required')
+    .max(100, 'Project name must be 100 characters or less')
+    .regex(/^[a-zA-Z0-9\s\-_]+$/, 'Project name can only contain letters, numbers, spaces, hyphens, and underscores')
+    .refine((val) => !val.startsWith(' ') && !val.endsWith(' '), 'Project name cannot start or end with spaces'),
+  port: z
+    .number()
+    .int('Port must be an integer')
+    .min(1024, 'Port must be 1024 or higher (ports below 1024 require root privileges)')
+    .max(65535, 'Port must be 65535 or lower'),
+  moodleVersion: z.string().min(1, 'Moodle version is required')
+})
+
 export function NewProjectModal({ onClose }: NewProjectModalProps) {
   const [projectName, setProjectName] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
   const [port, setPort] = useState('8080')
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const addProject = useProjectStore((state) => state.addProject)
   const workspaceFolder = useSettingsStore((state) => state.workspaceFolder)
 
@@ -32,14 +50,44 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
     : null
 
   const handleCreate = () => {
-    if (!projectName || !selectedVersion || !workspaceFolder) return
+    if (!workspaceFolder) {
+      setErrors({ general: 'Workspace folder is not configured. Please set it in settings.' })
+      return
+    }
+
+    // Validate input
+    const validationResult = projectSchema.safeParse({
+      name: projectName.trim(),
+      port: parseInt(port, 10),
+      moodleVersion: selectedVersion
+    })
+
+    if (!validationResult.success) {
+      const fieldErrors: Record<string, string> = {}
+      validationResult.error.issues.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message
+        }
+      })
+      setErrors(fieldErrors)
+      return
+    }
+
+    // Check if port is a valid number
+    const portNum = parseInt(port, 10)
+    if (isNaN(portNum)) {
+      setErrors({ port: 'Port must be a valid number' })
+      return
+    }
+
+    setErrors({})
 
     const projectSlug = projectName.toLowerCase().replace(/\s+/g, '-')
 
     addProject({
-      name: projectName,
+      name: projectName.trim(),
       moodleVersion: selectedVersion,
-      port: parseInt(port),
+      port: portNum,
       status: 'stopped',
       path: `${workspaceFolder}/${projectSlug}`
     })
@@ -47,58 +95,151 @@ export function NewProjectModal({ onClose }: NewProjectModalProps) {
     onClose()
   }
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
-          <DialogDescription>Set up a new Moodle development environment</DialogDescription>
+          <DialogDescription>
+            Set up a new Moodle development environment
+            <span className="text-xs text-muted-foreground block mt-1">
+              Press Escape to cancel
+            </span>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {errors.general && (
+            <div className="rounded-lg bg-destructive/15 border border-destructive/50 p-3 text-sm text-destructive">
+              {errors.general}
+            </div>
+          )}
+
           <div className="grid gap-2">
             <Label htmlFor="name">Project Name</Label>
             <Input
               id="name"
               placeholder="My Moodle Site"
               value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+              onChange={(e) => {
+                setProjectName(e.target.value)
+                if (errors.name) setErrors({ ...errors, name: '' })
+              }}
+              className={errors.name ? 'border-destructive' : ''}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'name-error' : 'name-help'}
             />
+            {errors.name && (
+              <p id="name-error" className="text-xs text-destructive" role="alert">
+                {errors.name}
+              </p>
+            )}
+            <p id="name-help" className="text-xs text-muted-foreground">
+              Only letters, numbers, spaces, hyphens, and underscores are allowed
+            </p>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="version">Moodle Version</Label>
-            <Select value={selectedVersion} onValueChange={setSelectedVersion}>
-              <SelectTrigger id="version">
+            <Select
+              value={selectedVersion}
+              onValueChange={(value) => {
+                setSelectedVersion(value)
+                if (errors.moodleVersion) setErrors({ ...errors, moodleVersion: '' })
+              }}
+            >
+              <SelectTrigger 
+                id="version" 
+                className={errors.moodleVersion ? 'border-destructive' : ''}
+                aria-invalid={!!errors.moodleVersion}
+                aria-describedby={errors.moodleVersion ? 'version-error' : undefined}
+              >
                 <SelectValue placeholder="Select a version" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent role="listbox">
                 {versions.map((version) => (
-                  <SelectItem key={version.version} value={version.version}>
+                  <SelectItem 
+                    key={version.version} 
+                    value={version.version}
+                    role="option"
+                  >
                     Moodle {version.version} ({version.type.toUpperCase()}) - PHP{' '}
                     {version.requirements.php}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {errors.moodleVersion && (
+              <p id="version-error" className="text-xs text-destructive" role="alert">
+                {errors.moodleVersion}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="port">Port</Label>
-            <Input id="port" type="number" value={port} onChange={(e) => setPort(e.target.value)} />
-            <p className="text-xs text-muted-foreground">
-              Your Moodle site will be available at http://localhost:{port}
+            <Input
+              id="port"
+              type="number"
+              value={port}
+              onChange={(e) => {
+                setPort(e.target.value)
+                if (errors.port) setErrors({ ...errors, port: '' })
+              }}
+              className={errors.port ? 'border-destructive' : ''}
+              min={1024}
+              max={65535}
+              aria-invalid={!!errors.port}
+              aria-describedby={errors.port ? 'port-error' : 'port-help'}
+            />
+            {errors.port && (
+              <p id="port-error" className="text-xs text-destructive" role="alert">
+                {errors.port}
+              </p>
+            )}
+            <p id="port-help" className="text-xs text-muted-foreground">
+              Your Moodle site will be available at http://localhost:{port || '8080'}
             </p>
           </div>
 
           {selectedVersionData && (
-            <div className="rounded-lg bg-muted p-3 text-sm">
-              <p className="font-medium mb-1">Auto-configured:</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• PHP {selectedVersionData.requirements.php}</li>
-                <li>• Mysql {selectedVersionData.requirements.mysql}</li>
-                <li>• Admin credentials: admin / admin</li>
-              </ul>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="font-medium mb-1">Auto-configured:</p>
+                <ul className="text-muted-foreground space-y-1">
+                  <li>• PHP {selectedVersionData.requirements.php}</li>
+                  <li>• Mysql {selectedVersionData.requirements.mysql}</li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <span className="text-yellow-600 dark:text-yellow-400 text-lg flex-shrink-0 mt-0.5">⚠️</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-300 mb-1">
+                      Default Admin Credentials
+                    </p>
+                    <p className="text-yellow-700 dark:text-yellow-400">
+                      Username: <strong>admin</strong> / Password: <strong>admin</strong>
+                    </p>
+                    <p className="text-yellow-600 dark:text-yellow-500 text-xs mt-1">
+                      These are default development credentials. Change them after first login for security.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

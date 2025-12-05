@@ -11,6 +11,29 @@ function App() {
     loadSettings()
   }, [loadSettings])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Cmd+N or Ctrl+N: Create new project
+      if ((event.metaKey || event.ctrlKey) && event.key === 'n') {
+        event.preventDefault()
+        if (!showNewProject) {
+          setShowNewProject(true)
+        }
+      }
+      
+      // Escape: Close modals
+      if (event.key === 'Escape' && showNewProject) {
+        setShowNewProject(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showNewProject])
+
   return (
     <div className={`${theme} h-screen bg-background text-foreground`}>
       <Dashboard onNewProject={() => setShowNewProject(true)} />

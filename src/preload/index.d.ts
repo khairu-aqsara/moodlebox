@@ -10,6 +10,7 @@ declare global {
         start: (id: string) => Promise<void>
         stop: (id: string) => Promise<void>
         delete: (id: string) => Promise<void>
+        duplicate: (id: string, newName: string, newPort: number) => Promise<Project>
         openFolder: (path: string) => Promise<void>
         openBrowser: (port: number) => Promise<void>
         getDefaultPath: () => Promise<string>
@@ -19,6 +20,7 @@ declare global {
         ) => () => void
         checkDocker: () => Promise<boolean>
         syncStates: () => Promise<void>
+        getLogs: (id: string) => Promise<string>
       }
       app: {
         getLogPath: () => Promise<string>
