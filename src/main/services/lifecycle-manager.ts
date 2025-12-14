@@ -300,10 +300,11 @@ export class LifecycleManager {
             timeoutId = null
           }
 
-          if (err.name === 'AbortError') {
+          const error = err as any
+          if (error.name === 'AbortError') {
             onLog?.(`  Attempt ${attempts}: Timeout`)
           } else {
-            onLog?.(`  Attempt ${attempts}: ${err?.code || err?.message || 'Connection failed'}`)
+            onLog?.(`  Attempt ${attempts}: ${error?.code || error?.message || 'Connection failed'}`)
           }
         }
 

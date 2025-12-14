@@ -109,15 +109,16 @@ export class MoodleDownloader {
       'fetch failed'
     ]
 
-    const errorMessage = (error.message || String(error)).toLowerCase()
-    const errorCode = error.code || ''
+    const errAny = error as any
+    const errorMessage = (errAny.message || String(error)).toLowerCase()
+    const errorCode = errAny.code || ''
 
     return (
       retryableErrors.some(
         (err) => errorMessage.includes(err.toLowerCase()) || errorCode.includes(err)
       ) ||
-      error.name === 'AbortError' ||
-      (error.status && error.status >= 500) // Server errors
+      errAny.name === 'AbortError' ||
+      (errAny.status && errAny.status >= 500) // Server errors
     )
   }
 
@@ -147,7 +148,7 @@ export class MoodleDownloader {
         delay = this.INITIAL_RETRY_DELAY * Math.pow(2, attempt)
         log.warn(
           `${operation} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`,
-          error.message
+          (error as any).message || String(error)
         )
 
         await new Promise((resolve) => setTimeout(resolve, delay))
@@ -667,17 +668,21 @@ export class MoodleDownloader {
       const extractedContents = await fs.readdir(extractTempPath)
       const finalPath = join(absoluteDestination, 'moodlecode')
 
+      log.info(`Moving Moodle files to final destination: ${finalPath}`)
+
       if (extractedContents.length === 1) {
         // Single folder - likely the nested Moodle folder
         const nestedFolder = join(extractTempPath, extractedContents[0])
         const stat = await fs.stat(nestedFolder)
 
         if (stat.isDirectory()) {
+          log.debug(`Found nested folder: ${extractedContents[0]}`)
           // Move nested folder contents to moodlecode/
           await fs.mkdir(finalPath, { recursive: true })
 
           // Move all files from nested folder to final destination
           const files = await fs.readdir(nestedFolder)
+          log.debug(`Moving ${files.length} items from nested folder`)
           for (const file of files) {
             await this.safeMove(join(nestedFolder, file), join(finalPath, file))
           }
@@ -687,7 +692,21 @@ export class MoodleDownloader {
         }
       } else {
         // Multiple items at root - move temp extract to moodlecode
+        log.debug(`Moving ${extractedContents.length} items from root extract`)
         await this.safeMove(extractTempPath, finalPath)
+      }
+
+      // Verify the move was successful
+      const verifyPath = join(finalPath, 'config-dist.php')
+      try {
+        await fs.access(verifyPath)
+        log.info(`Verified Moodle files at ${finalPath}`)
+      } catch {
+        throw new Error(
+          `Failed to verify Moodle files at ${finalPath}. ` +
+            `The extraction may have failed silently. ` +
+            `Please delete the project folder and try again.`
+        )
       }
 
       // Clean up temp directory
@@ -697,7 +716,8 @@ export class MoodleDownloader {
       // Only clean up if it's a non-resumable error
 
       // Enhance error message
-      if (error.name === 'AbortError') {
+      const errAny = error as any
+      if (errAny.name === 'AbortError') {
         const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60)
         const errorMsg =
           `Download timed out after ${elapsedMinutes} minutes.\n\n` +
@@ -709,17 +729,17 @@ export class MoodleDownloader {
           `For very slow connections, please ensure your internet is stable and try again.\n\n` +
           `Tip: Moodle downloads can be large (100-200MB+). On slow connections, this may take 20-30+ minutes.`
         throw new Error(errorMsg)
-      } else if (error.message?.includes('Failed to download')) {
+      } else if (errAny.message?.includes('Failed to download')) {
         throw error
       } else {
         throw new Error(
-          `Download or extraction failed: ${error.message}\n\n` +
+          `Download or extraction failed: ${errAny.message || String(error)}\n\n` +
             `Possible causes:\n` +
             `- Network interruption during download\n` +
             `- Insufficient disk space\n` +
             `- File permissions issue\n\n` +
             `The download can be resumed automatically on retry.\n\n` +
-            `Original error: ${error.message}`
+            `Original error: ${errAny.message || String(error)}`
         )
       }
     }
@@ -897,56 +917,70 @@ export class MoodleDownloader {
     dest: string,
     retries = FILE_OPS.MOVE_RETRIES
   ): Promise<void> {
+    let lastError: Error | null = null
+
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         await fs.rename(source, dest)
+        log.debug(`Successfully moved ${source} to ${dest}`)
         return
       } catch (error: unknown) {
-        if (
-          error instanceof Error &&
-          'code' in error &&
-          (error.code === 'EXDEV' || error.code === 'EPERM' || error.code === 'EBUSY')
-        ) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        const errorCode = (error as NodeJS.ErrnoException).code
+
+        if (errorCode === 'EXDEV' || errorCode === 'EPERM' || errorCode === 'EBUSY') {
           // Cross-device move or locked file - copy and delete
           // On Windows, wait with exponential backoff before retrying
           if (this.isWindows && attempt < retries - 1) {
             const backoffMs = Math.min(
               FILE_OPS.WINDOWS_BACKOFF_BASE_MS * Math.pow(2, attempt),
-              1000
+              2000 // Increased max backoff to 2 seconds
             )
             log.debug(
-              `File locked, retrying move in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
+              `File locked (${errorCode}), retrying move in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
             )
             await new Promise((resolve) => setTimeout(resolve, backoffMs))
             continue
           }
 
           // Last attempt or non-Windows: use copy+delete fallback
-          log.debug(`Using copy+delete fallback for move operation`)
-          await fs.cp(source, dest, { recursive: true })
-          await fs.rm(source, { recursive: true, force: true })
-          return
-        } else if (
-          this.isWindows &&
-          (error.code === 'ENOENT' || error.code === 'EACCES') &&
-          attempt < retries - 1
-        ) {
+          log.info(`Using copy+delete fallback for move operation (${errorCode})`)
+          try {
+            await fs.cp(source, dest, { recursive: true })
+            await fs.rm(source, { recursive: true, force: true })
+            log.debug(`Successfully moved ${source} to ${dest} via copy+delete`)
+            return
+          } catch (copyError) {
+            lastError =
+              copyError instanceof Error ? copyError : new Error(String(copyError))
+            log.error(`Copy+delete fallback failed: ${lastError.message}`)
+            throw lastError
+          }
+        } else if (this.isWindows && errorCode === 'EACCES' && attempt < retries - 1) {
           // Windows-specific: file may be temporarily locked by antivirus
           const backoffMs = Math.min(
             FILE_OPS.WINDOWS_BACKOFF_BASE_MS * 2 * Math.pow(2, attempt),
-            2000
+            3000 // Increased max backoff to 3 seconds for EACCES
           )
           log.debug(
-            `File access error, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
+            `File access denied (EACCES), retrying in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
           )
           await new Promise((resolve) => setTimeout(resolve, backoffMs))
           continue
         } else {
-          throw error
+          // Non-retryable error (including ENOENT - file not found)
+          log.error(`Move failed with non-retryable error: ${errorCode} - ${lastError.message}`)
+          throw lastError
         }
       }
     }
+
+    // All retries exhausted - throw the last error
+    const errorMsg = `Failed to move ${source} to ${dest} after ${retries} attempts`
+    log.error(errorMsg, lastError)
+    throw lastError || new Error(errorMsg)
   }
+
 
   /**
    * Safely remove a directory with retries and exponential backoff

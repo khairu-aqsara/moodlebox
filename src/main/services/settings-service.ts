@@ -1,6 +1,7 @@
 import Store from 'electron-store'
 import { app } from 'electron'
 import { join, resolve, normalize } from 'path'
+import log from 'electron-log'
 
 export interface AppSettings {
   theme: 'light' | 'dark'
@@ -13,7 +14,7 @@ interface SettingsStoreSchema {
 }
 
 export class SettingsService {
-  private store: Store<SettingsStoreSchema> & {
+  private store!: Store<SettingsStoreSchema> & {
     get<K extends keyof SettingsStoreSchema>(key: K): SettingsStoreSchema[K]
     set<K extends keyof SettingsStoreSchema>(key: K, value: SettingsStoreSchema[K]): void
   }
