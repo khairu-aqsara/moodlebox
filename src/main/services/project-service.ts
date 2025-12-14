@@ -675,7 +675,7 @@ export class ProjectService {
           throw error
         }
         // Otherwise, log and continue (might be a permission issue or Docker not accessible)
-        log.warn(`Could not check for existing containers: ${error.message}`)
+        log.warn(`Could not check for existing containers: ${(error as any).message || String(error)}`)
       }
     }
 
