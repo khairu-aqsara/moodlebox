@@ -4,9 +4,14 @@ import { renameSync, existsSync, mkdirSync } from 'fs'
 import icon from '../../build/icon.png?asset'
 import { ProjectService } from './services/project-service'
 import { SettingsService } from './services/settings-service'
-import { Project } from './types'
 import log from 'electron-log'
 import { verifyAssets } from './utils/asset-path'
+import {
+  validateProjectCreate,
+  validateProjectId,
+  validateProjectName,
+  validatePort
+} from './utils/validation'
 
 // Configure electron-log for production file logging
 log.transports.file.level = 'info' // Log info, warn, and error in production
@@ -105,7 +110,10 @@ function createWindow(): BrowserWindow {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true
     }
   })
 
@@ -140,31 +148,41 @@ function setupIPCHandlers(): void {
   })
 
   // Create project
-  ipcMain.handle('projects:create', async (_, project: Omit<Project, 'id' | 'createdAt'>) => {
-    return await projectService.createProject(project)
+  ipcMain.handle('projects:create', async (_, project: unknown) => {
+    const validated = validateProjectCreate(project)
+    return await projectService.createProject(validated)
   })
 
   // Start project
-  ipcMain.handle('projects:start', async (event, id: string) => {
-    await projectService.startProject(id, (log) => {
-      event.sender.send('project:log', { id, log })
+  ipcMain.handle('projects:start', async (event, id: unknown) => {
+    const validatedId = validateProjectId(id)
+    await projectService.startProject(validatedId, (log) => {
+      event.sender.send('project:log', { id: validatedId, log })
     })
   })
 
   // Stop project
-  ipcMain.handle('projects:stop', async (_, id: string) => {
-    await projectService.stopProject(id)
+  ipcMain.handle('projects:stop', async (_, id: unknown) => {
+    const validatedId = validateProjectId(id)
+    await projectService.stopProject(validatedId)
   })
 
   // Delete project
-  ipcMain.handle('projects:delete', async (_, id: string) => {
-    await projectService.deleteProject(id)
+  ipcMain.handle('projects:delete', async (_, id: unknown) => {
+    const validatedId = validateProjectId(id)
+    await projectService.deleteProject(validatedId)
   })
 
   // Duplicate project
-  ipcMain.handle('projects:duplicate', async (_, id: string, newName: string, newPort: number) => {
-    return await projectService.duplicateProject(id, newName, newPort)
-  })
+  ipcMain.handle(
+    'projects:duplicate',
+    async (_, id: unknown, newName: unknown, newPort: unknown) => {
+      const validatedId = validateProjectId(id)
+      const validatedName = validateProjectName(newName)
+      const validatedPort = validatePort(newPort)
+      return await projectService.duplicateProject(validatedId, validatedName, validatedPort)
+    }
+  )
 
   // Open project folder
   ipcMain.handle('projects:openFolder', (_, path: string) => {

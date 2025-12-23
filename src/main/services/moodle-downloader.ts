@@ -951,8 +951,7 @@ export class MoodleDownloader {
             log.debug(`Successfully moved ${source} to ${dest} via copy+delete`)
             return
           } catch (copyError) {
-            lastError =
-              copyError instanceof Error ? copyError : new Error(String(copyError))
+            lastError = copyError instanceof Error ? copyError : new Error(String(copyError))
             log.error(`Copy+delete fallback failed: ${lastError.message}`)
             throw lastError
           }
@@ -980,7 +979,6 @@ export class MoodleDownloader {
     log.error(errorMsg, lastError)
     throw lastError || new Error(errorMsg)
   }
-
 
   /**
    * Safely remove a directory with retries and exponential backoff
