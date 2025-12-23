@@ -304,7 +304,9 @@ export class LifecycleManager {
           if (error.name === 'AbortError') {
             onLog?.(`  Attempt ${attempts}: Timeout`)
           } else {
-            onLog?.(`  Attempt ${attempts}: ${error?.code || error?.message || 'Connection failed'}`)
+            onLog?.(
+              `  Attempt ${attempts}: ${error?.code || error?.message || 'Connection failed'}`
+            )
           }
         }
 

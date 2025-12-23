@@ -485,9 +485,13 @@ export class ProjectService {
     this.validatePort(project.port)
 
     // Validate and sanitize project path to prevent path traversal
-    // Basic path validation - ensure no path traversal attempts
+    // Reject paths with traversal attempts to protect against security vulnerabilities
     if (project.path.includes('..') || project.path.includes('~')) {
-      log.warn(`Project path contains suspicious characters: ${project.path}`)
+      throw new Error(
+        `Project path contains invalid characters.\n\n` +
+          `The path "${project.path}" contains '..' or '~' which is not allowed for security reasons.\n\n` +
+          `Please provide a valid absolute path without path traversal components.`
+      )
     }
 
     // Ensure path uses proper separators (cross-platform)
@@ -675,7 +679,9 @@ export class ProjectService {
           throw error
         }
         // Otherwise, log and continue (might be a permission issue or Docker not accessible)
-        log.warn(`Could not check for existing containers: ${(error as any).message || String(error)}`)
+        log.warn(
+          `Could not check for existing containers: ${(error as any).message || String(error)}`
+        )
       }
     }
 
