@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { SettingsService, AppSettings } from './settings-service'
+import { SettingsService } from './settings-service'
 
 // Mock Electron app module - must be inline due to vi.mock hoisting
 vi.mock('electron', () => ({
@@ -75,13 +75,13 @@ describe('SettingsService - Cross-Platform Path Handling', () => {
         value: 'darwin'
       })
 
-      const pathsToFix: [string, string][] = [
-        ['Users/test/Documents', '/Users/test/Documents'],
-        ['home/user/workspace', '/home/user/workspace'],
-        ['var/www/html', '/var/www/html']
+      const pathsToFix: string[] = [
+        'Users/test/Documents',
+        'home/user/workspace',
+        'var/www/html'
       ]
 
-      for (const [inputPath, expectedPath] of pathsToFix) {
+      for (const inputPath of pathsToFix) {
         const settings = settingsService.updateSettings({ workspaceFolder: inputPath })
         // On Unix, the path should be normalized to have leading slash
         expect(settings.workspaceFolder).toMatch(/^\//)
