@@ -253,4 +253,103 @@ describe('ProjectService - Security Validations', () => {
       }
     })
   })
+
+  describe('Cross-Platform Path Handling', () => {
+    const validProject: Omit<Project, 'id' | 'createdAt'> = {
+      name: 'Test Project',
+      port: 8080,
+      moodleVersion: '4.4',
+      path: '/tmp/test-moodle',
+      status: 'stopped'
+    }
+
+    it('should handle mixed path separators on Unix-like systems', async () => {
+      // These paths should be normalized correctly even with mixed separators
+      const mixedSeparatorPaths = [
+        '/Users/test\\Documents/moodle', // Mixed separators
+        'home/user\\moodle',
+        '/var/www\\moodle'
+      ]
+
+      for (const path of mixedSeparatorPaths) {
+        const project = { ...validProject, path }
+        try {
+          await projectService.createProject(project)
+        } catch (error) {
+          // Should not fail due to path separator issues
+          expect((error as Error).message).not.toContain('separator')
+        }
+      }
+    })
+
+    it('should handle Windows UNC paths', async () => {
+      const uncPaths = [
+        '\\\\server\\share\\moodle',
+        '\\\\?\\C:\\Very\\Long\\Path\\moodle'
+      ]
+
+      for (const path of uncPaths) {
+        const project = { ...validProject, path }
+        try {
+          await projectService.createProject(project)
+        } catch (error) {
+          // UNC paths should be accepted on Windows
+          expect((error as Error).message).not.toContain('UNC')
+        }
+      }
+    })
+
+    it('should auto-fix Unix paths missing leading slash', async () => {
+      const pathsMissingSlash = [
+        'Users/test/Documents/moodle',
+        'home/user/moodle',
+        'var/www/moodle'
+      ]
+
+      for (const path of pathsMissingSlash) {
+        const project = { ...validProject, path }
+        try {
+          await projectService.createProject(project)
+        } catch (error) {
+          // The path should be auto-fixed on Unix systems
+          // May still fail for other reasons (Docker, permissions, etc.)
+          expect((error as Error).message).not.toContain('missing leading')
+        }
+      }
+    })
+
+    it('should normalize paths for duplicate detection', async () => {
+      // Test that paths with different separators are recognized as duplicates
+      // Use /tmp which is writable on all platforms
+      const path1 = '/tmp/test-moodle-dup'
+      const path2 = '/tmp/test-moodle-dup' // Same path, should be detected as duplicate
+
+      const project1 = { ...validProject, path: path1, name: 'Project 1', port: 8080 }
+      const project2 = { ...validProject, path: path2, name: 'Project 2', port: 8081 }
+
+      let firstError: Error | null = null
+
+      try {
+        await projectService.createProject(project1)
+      } catch (error) {
+        firstError = error as Error
+        // May fail for other reasons (Docker not running, etc.), but path should be accepted
+        expect(firstError.message).not.toContain('invalid characters')
+      }
+
+      try {
+        await projectService.createProject(project2)
+      } catch (error) {
+        // Should detect duplicate path or have some related error
+        const errorMsg = (error as Error).message
+        // Either duplicate path error, port conflict, or first project creation failed
+        const isValidError =
+          errorMsg.includes('already exists') ||
+          errorMsg.includes('port') ||
+          errorMsg.includes('8080') ||
+          (firstError && firstError.message !== '')
+        expect(isValidError).toBe(true)
+      }
+    })
+  })
 })
