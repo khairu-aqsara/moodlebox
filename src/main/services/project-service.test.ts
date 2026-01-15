@@ -60,6 +60,11 @@ const mockVersions: Record<
   }
 }
 
+// Type for accessing private properties in tests
+interface ProjectServiceTestAccess {
+  versionsData: typeof mockVersions
+}
+
 describe('ProjectService - Security Validations', () => {
   let projectService: ProjectService
 
@@ -67,7 +72,7 @@ describe('ProjectService - Security Validations', () => {
     // Create fresh instance for each test
     projectService = new ProjectService()
     // Load mock versions data
-    ;(projectService as any).versionsData = mockVersions
+    ;(projectService as unknown as ProjectServiceTestAccess).versionsData = mockVersions
   })
 
   describe('Path Traversal Protection', () => {
@@ -283,10 +288,7 @@ describe('ProjectService - Security Validations', () => {
     })
 
     it('should handle Windows UNC paths', async () => {
-      const uncPaths = [
-        '\\\\server\\share\\moodle',
-        '\\\\?\\C:\\Very\\Long\\Path\\moodle'
-      ]
+      const uncPaths = ['\\\\server\\share\\moodle', '\\\\?\\C:\\Very\\Long\\Path\\moodle']
 
       for (const path of uncPaths) {
         const project = { ...validProject, path }

@@ -62,6 +62,11 @@ let updateListenerCleanup: (() => void) | null = null
 
 // Listen for project updates from main process
 const setupIPCListeners = (): void => {
+  // Guard: ensure window.api is available (preload script must have run)
+  if (typeof window === 'undefined' || !window.api?.projects) {
+    return
+  }
+
   // Clean up existing listeners if any
   if (logListenerCleanup) logListenerCleanup()
   if (updateListenerCleanup) updateListenerCleanup()
@@ -79,8 +84,14 @@ const setupIPCListeners = (): void => {
   })
 }
 
-// Initialize listeners when store is created
-setupIPCListeners()
+// Initialize listeners when DOM is ready (ensures preload script has run)
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setupIPCListeners()
+  } else {
+    document.addEventListener('DOMContentLoaded', setupIPCListeners)
+  }
+}
 
 // Cleanup on page unload (though Electron apps typically don't unload)
 if (typeof window !== 'undefined') {

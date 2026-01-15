@@ -3,7 +3,7 @@ import { Dashboard } from './components/Dashboard'
 import { NewProjectModal } from './components/NewProjectModal'
 import { useSettingsStore } from './store/settings-store'
 
-function App(): JSX.Element {
+function App(): React.JSX.Element {
   const [showNewProject, setShowNewProject] = useState(false)
   const { theme, loadSettings } = useSettingsStore()
 

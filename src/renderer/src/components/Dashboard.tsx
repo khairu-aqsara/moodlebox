@@ -12,7 +12,7 @@ interface DashboardProps {
   onNewProject: () => void
 }
 
-export function Dashboard({ onNewProject }: DashboardProps): JSX.Element {
+export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
   const projects = useProjectStore((state) => state.projects)
   const loadProjects = useProjectStore((state) => state.loadProjects)
   const [isFabOpen, setIsFabOpen] = useState(false)

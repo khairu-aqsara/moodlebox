@@ -109,16 +109,16 @@ export class MoodleDownloader {
       'fetch failed'
     ]
 
-    const errAny = error as any
-    const errorMessage = (errAny.message || String(error)).toLowerCase()
-    const errorCode = errAny.code || ''
+    const errTyped = error as Error & { code?: string; status?: number }
+    const errorMessage = (errTyped.message || String(error)).toLowerCase()
+    const errorCode = errTyped.code || ''
 
     return (
       retryableErrors.some(
         (err) => errorMessage.includes(err.toLowerCase()) || errorCode.includes(err)
       ) ||
-      errAny.name === 'AbortError' ||
-      (errAny.status && errAny.status >= 500) // Server errors
+      errTyped.name === 'AbortError' ||
+      (errTyped.status !== undefined && errTyped.status >= 500) // Server errors
     )
   }
 
@@ -148,7 +148,7 @@ export class MoodleDownloader {
         delay = this.INITIAL_RETRY_DELAY * Math.pow(2, attempt)
         log.warn(
           `${operation} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`,
-          (error as any).message || String(error)
+          error instanceof Error ? error.message : String(error)
         )
 
         await new Promise((resolve) => setTimeout(resolve, delay))
@@ -716,8 +716,9 @@ export class MoodleDownloader {
       // Only clean up if it's a non-resumable error
 
       // Enhance error message
-      const errAny = error as any
-      if (errAny.name === 'AbortError') {
+      const errTyped = error as Error & { name?: string }
+      const errMessage = errTyped.message || String(error)
+      if (errTyped.name === 'AbortError') {
         const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60)
         const errorMsg =
           `Download timed out after ${elapsedMinutes} minutes.\n\n` +
@@ -729,17 +730,17 @@ export class MoodleDownloader {
           `For very slow connections, please ensure your internet is stable and try again.\n\n` +
           `Tip: Moodle downloads can be large (100-200MB+). On slow connections, this may take 20-30+ minutes.`
         throw new Error(errorMsg)
-      } else if (errAny.message?.includes('Failed to download')) {
+      } else if (errMessage.includes('Failed to download')) {
         throw error
       } else {
         throw new Error(
-          `Download or extraction failed: ${errAny.message || String(error)}\n\n` +
+          `Download or extraction failed: ${errMessage}\n\n` +
             `Possible causes:\n` +
             `- Network interruption during download\n` +
             `- Insufficient disk space\n` +
             `- File permissions issue\n\n` +
             `The download can be resumed automatically on retry.\n\n` +
-            `Original error: ${errAny.message || String(error)}`
+            `Original error: ${errMessage}`
         )
       }
     }

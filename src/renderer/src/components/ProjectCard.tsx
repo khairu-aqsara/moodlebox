@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<Project['status'], { color: string; symbol: string; 
   error: { color: 'text-red-500', symbol: '⚠️', text: 'Error' }
 }
 
-export function ProjectCard({ project }: ProjectCardProps): JSX.Element {
+export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [logsDialogOpen, setLogsDialogOpen] = useState(false)
   const [logs, setLogs] = useState<string>('')
@@ -291,12 +291,7 @@ export function ProjectCard({ project }: ProjectCardProps): JSX.Element {
                 project.status === 'stopping') && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      onClick={handleViewLogs}
-                      size="icon"
-                      variant="outline"
-                      disabled={project.status === 'deleting'}
-                    >
+                    <Button onClick={handleViewLogs} size="icon" variant="outline">
                       <FileText className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>

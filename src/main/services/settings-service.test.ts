@@ -19,8 +19,15 @@ vi.mock('electron', () => ({
 
 // Mock electron-store
 vi.mock('electron-store', () => {
+  interface MockStoreData {
+    settings?: {
+      theme: 'light' | 'dark'
+      workspaceFolder: string
+      phpMyAdminPort: number
+    }
+  }
   class MockStore {
-    private data: Record<string, any> = {
+    private data: MockStoreData = {
       settings: {
         theme: 'dark',
         workspaceFolder: '/tmp/test/MoodleBox',
@@ -28,11 +35,11 @@ vi.mock('electron-store', () => {
       }
     }
 
-    get = vi.fn((key: string) => this.data[key])
-    set = vi.fn((key: string, value: any) => {
+    get = vi.fn((key: keyof MockStoreData) => this.data[key])
+    set = vi.fn(<K extends keyof MockStoreData>(key: K, value: MockStoreData[K]) => {
       this.data[key] = value
     })
-    delete = vi.fn((key: string) => {
+    delete = vi.fn((key: keyof MockStoreData) => {
       delete this.data[key]
     })
   }
@@ -75,11 +82,7 @@ describe('SettingsService - Cross-Platform Path Handling', () => {
         value: 'darwin'
       })
 
-      const pathsToFix: string[] = [
-        'Users/test/Documents',
-        'home/user/workspace',
-        'var/www/html'
-      ]
+      const pathsToFix: string[] = ['Users/test/Documents', 'home/user/workspace', 'var/www/html']
 
       for (const inputPath of pathsToFix) {
         const settings = settingsService.updateSettings({ workspaceFolder: inputPath })
@@ -141,10 +144,7 @@ describe('SettingsService - Cross-Platform Path Handling', () => {
         value: 'win32'
       })
 
-      const uncPaths = [
-        '\\\\server\\share\\workspace',
-        '\\\\network\\folder\\projects'
-      ]
+      const uncPaths = ['\\\\server\\share\\workspace', '\\\\network\\folder\\projects']
 
       for (const path of uncPaths) {
         const settings = settingsService.updateSettings({ workspaceFolder: path })

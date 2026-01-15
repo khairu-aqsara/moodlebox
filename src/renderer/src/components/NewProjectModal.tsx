@@ -74,7 +74,7 @@ const projectSchema = z.object({
   moodleVersion: z.string().min(1, 'Moodle version is required')
 })
 
-export function NewProjectModal({ onClose }: NewProjectModalProps): JSX.Element {
+export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.Element {
   const [projectName, setProjectName] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
   const [port, setPort] = useState('8080')

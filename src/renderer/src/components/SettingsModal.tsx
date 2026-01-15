@@ -8,7 +8,7 @@ interface SettingsModalProps {
   onClose: () => void
 }
 
-export function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
+export function SettingsModal({ onClose }: SettingsModalProps): React.JSX.Element {
   const { theme, workspaceFolder, phpMyAdminPort, updateSettings, selectFolder } =
     useSettingsStore()
   const [localTheme, setLocalTheme] = useState(theme)
