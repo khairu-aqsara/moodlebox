@@ -282,8 +282,19 @@ app.whenReady().then(async () => {
           }
         }
         window.webContents.on('before-input-event', handleBeforeInput)
-        // Note: No cleanup needed - Electron automatically removes listeners when window is destroyed
-        // Attempting to manually remove can cause errors if window is already destroyed
+
+        // Cleanup event listener when window is destroyed to prevent memory leaks
+        window.on('closed', () => {
+          // Only attempt to remove listener if webContents is still available
+          // This prevents "Object has been destroyed" errors on app quit
+          try {
+            if (window.webContents && !window.webContents.isDestroyed()) {
+              window.webContents.removeListener('before-input-event', handleBeforeInput)
+            }
+          } catch {
+            // Ignore errors during cleanup - object may already be destroyed
+          }
+        })
       }
     })
 
@@ -310,7 +321,7 @@ app.whenReady().then(async () => {
       // On macOS, re-create window if none exist
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createWindow()
-      } else if (mainWindow) {
+      } else if (mainWindow && !mainWindow.isDestroyed()) {
         // If window exists but is minimized or hidden, restore it
         if (mainWindow.isMinimized()) {
           mainWindow.restore()

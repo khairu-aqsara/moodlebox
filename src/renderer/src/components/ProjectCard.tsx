@@ -1,3 +1,4 @@
+import { memo, useState, useCallback, useMemo } from 'react'
 import { Project } from '../types'
 import {
   Play,
@@ -21,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog'
-import { useState } from 'react'
 
 interface ProjectCardProps {
   project: Project
@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<Project['status'], { color: string; symbol: string; 
   error: { color: 'text-red-500', symbol: '⚠️', text: 'Error' }
 }
 
-export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
+const ProjectCardComponent = ({ project }: ProjectCardProps): React.JSX.Element => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [logsDialogOpen, setLogsDialogOpen] = useState(false)
   const [logs, setLogs] = useState<string>('')
@@ -51,7 +51,38 @@ export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
   const openBrowser = useProjectStore((state) => state.openBrowser)
   const phpMyAdminPort = useSettingsStore((state) => state.phpMyAdminPort)
 
-  const handleViewLogs = async (): Promise<void> => {
+  const statusConfig = STATUS_CONFIG[project.status]
+
+  const lastUsedDate = useMemo(() => {
+    return project.lastUsed ? new Date(project.lastUsed).toLocaleDateString() : null
+  }, [project.lastUsed])
+
+  const handleStart = useCallback((): void => {
+    startProject(project.id)
+  }, [startProject, project.id])
+
+  const handleStop = useCallback(async (): Promise<void> => {
+    await stopProject(project.id)
+  }, [stopProject, project.id])
+
+  const handleDeleteConfirm = useCallback((): void => {
+    deleteProject(project.id)
+    setDeleteDialogOpen(false)
+  }, [deleteProject, project.id])
+
+  const handleOpenFolder = useCallback((): void => {
+    openFolder(project.path)
+  }, [openFolder, project.path])
+
+  const handleOpenBrowser = useCallback((): void => {
+    openBrowser(project.port)
+  }, [openBrowser, project.port])
+
+  const handleOpenPhpMyAdmin = useCallback((): void => {
+    window.open(`http://localhost:${phpMyAdminPort}`, '_blank')
+  }, [phpMyAdminPort])
+
+  const handleViewLogs = useCallback(async (): Promise<void> => {
     setLogsDialogOpen(true)
     setLogsLoading(true)
     try {
@@ -63,29 +94,7 @@ export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
     } finally {
       setLogsLoading(false)
     }
-  }
-
-  const statusConfig = STATUS_CONFIG[project.status]
-
-  const handleStart = (): void => {
-    startProject(project.id)
-  }
-  const handleStop = async (): Promise<void> => {
-    await stopProject(project.id)
-  }
-  const handleDeleteConfirm = (): void => {
-    deleteProject(project.id)
-    setDeleteDialogOpen(false)
-  }
-  const handleOpenFolder = (): void => {
-    openFolder(project.path)
-  }
-  const handleOpenBrowser = (): void => {
-    openBrowser(project.port)
-  }
-  const handleOpenPhpMyAdmin = (): void => {
-    window.open(`http://localhost:${phpMyAdminPort}`, '_blank')
-  }
+  }, [project.id])
 
   return (
     <>
@@ -95,6 +104,13 @@ export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
           role="article"
           aria-label={`Project ${project.name}, Moodle version ${project.moodleVersion}, status ${statusConfig.text}`}
         >
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0"
+          >
+            Project {project.name} is {statusConfig.text}
+          </span>
           <div className="flex items-start justify-between gap-4">
             {/* Left: Project Info */}
             <div className="flex-1 min-w-0">
@@ -131,10 +147,9 @@ export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
                       </div>
                     </>
                   )}
-                  {project.status === 'stopped' && project.lastUsed && (
+                  {project.status === 'stopped' && lastUsedDate && (
                     <div>
-                      <span className="font-medium">Last used:</span>{' '}
-                      {new Date(project.lastUsed).toLocaleDateString()}
+                      <span className="font-medium">Last used:</span> {lastUsedDate}
                     </div>
                   )}
                 </div>
@@ -387,3 +402,5 @@ export function ProjectCard({ project }: ProjectCardProps): React.JSX.Element {
     </>
   )
 }
+
+export const ProjectCard = memo(ProjectCardComponent)

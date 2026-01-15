@@ -62,13 +62,27 @@ export function validateProjectId(val: unknown): string {
 }
 
 /**
+ * Type guard for Project-like objects
+ */
+function isProjectLike(obj: unknown): obj is Partial<Project> {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    !Array.isArray(obj) &&
+    ('name' in obj || 'port' in obj || 'moodleVersion' in obj || 'path' in obj)
+  )
+}
+
+/**
  * Validates complete project creation data
  */
 export function validateProjectCreate(project: unknown): Omit<Project, 'id' | 'createdAt'> {
-  if (!project || typeof project !== 'object' || Array.isArray(project)) {
-    throw new Error('Invalid project data')
+  if (!isProjectLike(project)) {
+    throw new Error('Invalid project data: must be an object')
   }
+
   const p = project as Partial<Project>
+
   return {
     name: validateProjectName(p.name),
     port: validatePort(p.port),
