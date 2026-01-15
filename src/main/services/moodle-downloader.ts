@@ -670,6 +670,13 @@ export class MoodleDownloader {
 
       log.info(`Moving Moodle files to final destination: ${finalPath}`)
 
+      // On Windows, wait a bit after extraction for file handles to be released
+      // This is critical for Windows Defender and other antivirus software
+      if (this.isWindows) {
+        log.info('Windows detected: Waiting for file handles to be released after extraction...')
+        await new Promise((resolve) => setTimeout(resolve, FILE_OPS.WINDOWS_POST_EXTRACT_DELAY_MS))
+      }
+
       if (extractedContents.length === 1) {
         // Single folder - likely the nested Moodle folder
         const nestedFolder = join(extractTempPath, extractedContents[0])
@@ -682,17 +689,83 @@ export class MoodleDownloader {
 
           // Move all files from nested folder to final destination
           const files = await fs.readdir(nestedFolder)
-          log.debug(`Moving ${files.length} items from nested folder`)
+          log.info(`Moving ${files.length} items from nested folder to ${finalPath}`)
+
+          // Track progress for large file counts
+          let movedCount = 0
+          const failedFiles: string[] = []
+
           for (const file of files) {
-            await this.safeMove(join(nestedFolder, file), join(finalPath, file))
+            try {
+              await this.safeMove(join(nestedFolder, file), join(finalPath, file))
+              movedCount++
+              // Log progress every 100 files or at the end
+              if (movedCount % 100 === 0) {
+                log.debug(`Move progress: ${movedCount}/${files.length} items moved`)
+              }
+            } catch (moveError) {
+              const errorMsg = moveError instanceof Error ? moveError.message : String(moveError)
+              log.error(`Failed to move file "${file}": ${errorMsg}`)
+              failedFiles.push(file)
+              // On Windows, if a file fails, wait a bit and continue with others
+              // This allows us to move as many files as possible
+              if (this.isWindows) {
+                log.warn(`Windows: Continuing after file move failure, will retry failed files`)
+                await new Promise((resolve) => setTimeout(resolve, 500))
+              } else {
+                // On other platforms, throw immediately
+                throw moveError
+              }
+            }
           }
+
+          // On Windows, retry failed files with longer delays
+          if (this.isWindows && failedFiles.length > 0) {
+            log.info(
+              `Windows: Retrying ${failedFiles.length} failed file moves with extended delays...`
+            )
+            // Wait longer before retry
+            await new Promise((resolve) => setTimeout(resolve, 3000))
+
+            for (const file of failedFiles) {
+              try {
+                await this.safeMove(
+                  join(nestedFolder, file),
+                  join(finalPath, file),
+                  FILE_OPS.MOVE_RETRIES * 2 // Double the retries for failed files
+                )
+                movedCount++
+                log.debug(`Successfully moved previously failed file: ${file}`)
+              } catch (retryError) {
+                const errorMsg =
+                  retryError instanceof Error ? retryError.message : String(retryError)
+                log.error(`Final failure moving file "${file}": ${errorMsg}`)
+                throw new Error(
+                  `Failed to move Moodle files on Windows. ` +
+                    `File "${file}" could not be moved after multiple retries.\n\n` +
+                    `This is typically caused by:\n` +
+                    `- Antivirus software (Windows Defender) scanning the files\n` +
+                    `- Another application has the file open\n` +
+                    `- File permission issues\n\n` +
+                    `Please try:\n` +
+                    `1. Temporarily disable antivirus real-time scanning\n` +
+                    `2. Close any file explorer windows showing the project folder\n` +
+                    `3. Delete the project and try again\n\n` +
+                    `Error: ${errorMsg}`
+                )
+              }
+            }
+          }
+
+          log.info(`Successfully moved ${movedCount} items to final destination`)
         } else {
           // Not a folder, just move the temp extract to moodlecode
+          log.info(`Moving single file extraction to ${finalPath}`)
           await this.safeMove(extractTempPath, finalPath)
         }
       } else {
         // Multiple items at root - move temp extract to moodlecode
-        log.debug(`Moving ${extractedContents.length} items from root extract`)
+        log.info(`Moving ${extractedContents.length} items from root extract to ${finalPath}`)
         await this.safeMove(extractTempPath, finalPath)
       }
 
@@ -912,6 +985,12 @@ export class MoodleDownloader {
   /**
    * Safely move a file or directory, handling cross-device links and Windows locking
    * Enhanced with retry logic and exponential backoff for Windows
+   *
+   * Windows-specific handling:
+   * - Longer initial delay to allow antivirus to finish scanning
+   * - More aggressive retry with exponential backoff
+   * - Handles EBUSY, EPERM, EACCES errors that are common on Windows
+   * - Falls back to copy+delete if rename consistently fails
    */
   private async safeMove(
     source: string,
@@ -919,64 +998,107 @@ export class MoodleDownloader {
     retries = FILE_OPS.MOVE_RETRIES
   ): Promise<void> {
     let lastError: Error | null = null
+    const sourceName = source.split(/[/\\]/).pop() || source
+
+    // Windows-specific error codes that indicate file locking
+    const windowsRetryableCodes = ['EBUSY', 'EPERM', 'EACCES', 'EXDEV', 'ENOTEMPTY']
 
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         await fs.rename(source, dest)
-        log.debug(`Successfully moved ${source} to ${dest}`)
+        if (attempt > 0) {
+          log.debug(`Successfully moved "${sourceName}" after ${attempt + 1} attempts`)
+        }
         return
       } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error))
-        const errorCode = (error as NodeJS.ErrnoException).code
+        const errorCode = (error as NodeJS.ErrnoException).code || 'UNKNOWN'
 
-        if (errorCode === 'EXDEV' || errorCode === 'EPERM' || errorCode === 'EBUSY') {
-          // Cross-device move or locked file - copy and delete
-          // On Windows, wait with exponential backoff before retrying
-          if (this.isWindows && attempt < retries - 1) {
-            const backoffMs = Math.min(
-              FILE_OPS.WINDOWS_BACKOFF_BASE_MS * Math.pow(2, attempt),
-              2000 // Increased max backoff to 2 seconds
-            )
-            log.debug(
-              `File locked (${errorCode}), retrying move in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
-            )
-            await new Promise((resolve) => setTimeout(resolve, backoffMs))
-            continue
-          }
+        // Check if this is a retryable error
+        const isRetryable = windowsRetryableCodes.includes(errorCode)
 
-          // Last attempt or non-Windows: use copy+delete fallback
-          log.info(`Using copy+delete fallback for move operation (${errorCode})`)
-          try {
-            await fs.cp(source, dest, { recursive: true })
-            await fs.rm(source, { recursive: true, force: true })
-            log.debug(`Successfully moved ${source} to ${dest} via copy+delete`)
-            return
-          } catch (copyError) {
-            lastError = copyError instanceof Error ? copyError : new Error(String(copyError))
-            log.error(`Copy+delete fallback failed: ${lastError.message}`)
-            throw lastError
-          }
-        } else if (this.isWindows && errorCode === 'EACCES' && attempt < retries - 1) {
-          // Windows-specific: file may be temporarily locked by antivirus
-          const backoffMs = Math.min(
-            FILE_OPS.WINDOWS_BACKOFF_BASE_MS * 2 * Math.pow(2, attempt),
-            3000 // Increased max backoff to 3 seconds for EACCES
-          )
+        if (isRetryable && attempt < retries - 1) {
+          // Calculate backoff with jitter for Windows
+          // Base: 500ms, doubles each attempt, max 5 seconds, plus random jitter
+          const baseBackoff = this.isWindows
+            ? FILE_OPS.WINDOWS_BACKOFF_BASE_MS
+            : FILE_OPS.NON_WINDOWS_BACKOFF_BASE_MS
+          const maxBackoff = this.isWindows ? 5000 : 1000
+          const jitter = Math.random() * 200 // Add 0-200ms random jitter
+
+          const backoffMs = Math.min(baseBackoff * Math.pow(2, attempt), maxBackoff) + jitter
+
           log.debug(
-            `File access denied (EACCES), retrying in ${backoffMs}ms (attempt ${attempt + 1}/${retries})`
+            `Move failed for "${sourceName}" (${errorCode}), retrying in ${Math.round(backoffMs)}ms (attempt ${attempt + 1}/${retries})`
           )
           await new Promise((resolve) => setTimeout(resolve, backoffMs))
           continue
-        } else {
-          // Non-retryable error (including ENOENT - file not found)
-          log.error(`Move failed with non-retryable error: ${errorCode} - ${lastError.message}`)
-          throw lastError
         }
+
+        // Last attempt or non-retryable: try copy+delete fallback
+        if (isRetryable || errorCode === 'EXDEV') {
+          log.info(
+            `Using copy+delete fallback for "${sourceName}" after ${attempt + 1} attempts (${errorCode})`
+          )
+          try {
+            // On Windows, wait before copy attempt to ensure file handles are released
+            if (this.isWindows) {
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+            }
+
+            // Use copy with force to overwrite if destination exists
+            await fs.cp(source, dest, { recursive: true, force: true })
+
+            // Verify the copy succeeded before deleting source
+            try {
+              await fs.access(dest)
+            } catch {
+              throw new Error(`Copy verification failed for "${sourceName}"`)
+            }
+
+            // Delete source with retry for Windows
+            let rmAttempts = 0
+            const maxRmAttempts = this.isWindows ? 5 : 2
+            while (rmAttempts < maxRmAttempts) {
+              try {
+                await fs.rm(source, { recursive: true, force: true })
+                break
+              } catch (rmError) {
+                rmAttempts++
+                if (rmAttempts >= maxRmAttempts) {
+                  // Source cleanup failed but copy succeeded - log warning but don't fail
+                  log.warn(
+                    `Could not delete source "${sourceName}" after copy, leaving orphaned: ${rmError}`
+                  )
+                  break
+                }
+                if (this.isWindows) {
+                  await new Promise((resolve) => setTimeout(resolve, 500 * rmAttempts))
+                }
+              }
+            }
+
+            log.debug(`Successfully moved "${sourceName}" via copy+delete`)
+            return
+          } catch (copyError) {
+            lastError = copyError instanceof Error ? copyError : new Error(String(copyError))
+            log.error(`Copy+delete fallback failed for "${sourceName}": ${lastError.message}`)
+            // Don't throw yet - we'll throw at the end with better context
+          }
+        }
+
+        // Non-retryable error or all fallbacks failed
+        if (!isRetryable && errorCode !== 'EXDEV') {
+          log.error(
+            `Move failed for "${sourceName}" with non-retryable error: ${errorCode} - ${lastError.message}`
+          )
+        }
+        break
       }
     }
 
-    // All retries exhausted - throw the last error
-    const errorMsg = `Failed to move ${source} to ${dest} after ${retries} attempts`
+    // All retries and fallbacks exhausted
+    const errorMsg = `Failed to move "${sourceName}" after ${retries} attempts`
     log.error(errorMsg, lastError)
     throw lastError || new Error(errorMsg)
   }

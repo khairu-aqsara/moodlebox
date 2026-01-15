@@ -934,6 +934,8 @@ export class ProjectService {
     // Set status to deleting
     this.updateProject(id, { status: 'deleting' })
 
+    const isWindows = process.platform === 'win32'
+
     // Stop and remove containers, volumes, and networks
     try {
       await this.dockerService.composeDown({
@@ -945,20 +947,52 @@ export class ProjectService {
       // Continue with deletion even if Docker cleanup fails
     }
 
-    // Delete project directory
-    try {
-      await fs.rm(project.path, { recursive: true, force: true })
-    } catch (error) {
-      log.error('Error deleting project directory:', error)
-      // Continue with database deletion even if directory deletion fails
+    // Delete project directory with Windows-specific retry logic
+    let deleteSucceeded = false
+    const maxAttempts = isWindows ? 5 : 2
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await fs.rm(project.path, { recursive: true, force: true })
+        deleteSucceeded = true
+        log.info(`Successfully deleted project directory: ${project.path}`)
+        break
+      } catch (error) {
+        const errorCode = (error as NodeJS.ErrnoException).code
+        log.warn(
+          `Failed to delete project directory (attempt ${attempt + 1}/${maxAttempts}): ${errorCode}`
+        )
+
+        if (attempt < maxAttempts - 1) {
+          // On Windows, files might be locked by antivirus or file explorer
+          // Wait with exponential backoff before retrying
+          const delayMs = isWindows ? 1000 * Math.pow(2, attempt) : 500
+          log.info(`Waiting ${delayMs}ms before retry...`)
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+        } else {
+          log.error('Error deleting project directory after all attempts:', error)
+        }
+      }
     }
 
-    // Remove from database
+    // If directory deletion failed on Windows, log a warning but still remove from database
+    // The user can manually delete the folder later
+    if (!deleteSucceeded && isWindows) {
+      log.warn(
+        `Could not delete project folder "${project.path}". ` +
+          `The project will be removed from the app, but the folder may need to be deleted manually.`
+      )
+    }
+
+    // Remove from database - always do this even if file deletion failed
+    // This ensures the user isn't stuck with a "ghost" project
     const projects = this.getAllProjects()
     this.store.set(
       'projects',
       projects.filter((p) => p.id !== id)
     )
+
+    log.info(`Project "${project.name}" removed from database`)
   }
 
   /**
