@@ -56,10 +56,11 @@ export const HTTP_WAIT = {
 
 // File operation constants
 export const FILE_OPS = {
-  MOVE_RETRIES: 5, // Number of retries for file moves (increased for Windows antivirus delays)
-  REMOVE_RETRIES: 7, // Number of retries for directory removal (increased for Windows)
-  WINDOWS_BACKOFF_BASE_MS: 500, // Base delay for Windows retries (increased from 200ms)
-  NON_WINDOWS_BACKOFF_BASE_MS: 100 // Base delay for non-Windows retries
+  MOVE_RETRIES: 7, // Number of retries for file moves (increased for Windows antivirus delays)
+  REMOVE_RETRIES: 10, // Number of retries for directory removal (increased for Windows)
+  WINDOWS_BACKOFF_BASE_MS: 750, // Base delay for Windows retries (750ms for antivirus scanning)
+  NON_WINDOWS_BACKOFF_BASE_MS: 100, // Base delay for non-Windows retries
+  WINDOWS_POST_EXTRACT_DELAY_MS: 3000 // Delay after extraction before moving files on Windows
 }
 
 // Window constants
