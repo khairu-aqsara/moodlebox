@@ -128,5 +128,32 @@ jobs:
             linux-builds/*.deb
             linux-builds/*.rpm
           draft: true
+          body: |
+            ## 🚀 Installation
+
+            ### macOS Users
+            **⚠️ Important:** This app is unsigned. If you see "MoodleBox is damaged" error:
+
+            ```bash
+            # Remove quarantine attribute from downloaded DMG:
+            xattr -cr ~/Downloads/moodlebox-*.dmg
+            ```
+
+            Or use our fix script:
+            ```bash
+            curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/fix-macos-quarantine.sh
+            chmod +x fix-macos-quarantine.sh
+            ./fix-macos-quarantine.sh
+            ```
+
+            ### Windows Users
+            Run the installer. Windows Defender may show a warning - click "More info" → "Run anyway"
+
+            ### Linux Users
+            Make AppImage executable: `chmod +x moodlebox-*.AppImage`
+            Or install .deb/.rpm package
+
+            ## 📝 What's Changed
+            See [CHANGELOG.md](CHANGELOG.md) for details
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

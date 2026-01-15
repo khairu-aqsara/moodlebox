@@ -1,6 +1,6 @@
 appId: com.moodlebox.app
 productName: MoodleBox
-copyright: Copyright © 2025 MoodleBox Team
+copyright: Copyright © 2025-2026 MoodleBox @khairu-aqsara
 
 directories:
   buildResources: build
@@ -8,33 +8,33 @@ directories:
 
 # Files to include in all builds
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - '!planning/*'
-  - '!.github/*'
-  - '!BUILD_GUIDE.md'
-  - '!PRD.md'
-  - '!CLAUDE.md'
-  - '!generate-icon.py'
-  - '!build/icons/*'
-  - '!build/icon-source.png'
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.{js,ts,mjs,cjs}"
+  - "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
+  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!planning/*"
+  - "!.github/*"
+  - "!BUILD_GUIDE.md"
+  - "!PRD.md"
+  - "!CLAUDE.md"
+  - "!generate-icon.py"
+  - "!build/icons/*"
+  - "!build/icon-source.png"
   # Exclude unnecessary node_modules files
-  - '!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}'
-  - '!node_modules/**/{test,__tests__,tests,powered-test,example,examples}'
-  - '!node_modules/**/*.d.ts'
-  - '!node_modules/**/*.md'
-  - '!node_modules/.bin'
-  - '!node_modules/.cache'
+  - "!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!node_modules/**/{test,__tests__,tests,powered-test,example,examples}"
+  - "!node_modules/**/*.d.ts"
+  - "!node_modules/**/*.md"
+  - "!node_modules/.bin"
+  - "!node_modules/.cache"
   # Exclude all locales except English
-  - '!**/node_modules/**/locales/**'
-  - '**/node_modules/**/locales/en*.pak'
+  - "!**/node_modules/**/locales/**"
+  - "**/node_modules/**/locales/en*.pak"
   # Exclude source maps
-  - '!**/*.map'
-  - '!**/*.js.map'
+  - "!**/*.map"
+  - "!**/*.js.map"
   # Include necessary directories
   - out/**/*
   - assets/**
@@ -59,12 +59,14 @@ mac:
       arch: [x64, arm64] # Intel and Apple Silicon
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # Enable hardened runtime and gatekeeper when signing (required for notarization)
-  # These are safe to enable even for unsigned builds
-  hardenedRuntime: true
-  gatekeeperAssess: true
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  # Hardened runtime and gatekeeper are DISABLED for unsigned builds
+  # Enable only when you have a valid Apple Developer certificate
+  # To enable: set CSC_NAME environment variable to your certificate name
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  # Entitlements only needed for signed builds
+  # entitlements: build/entitlements.mac.plist
+  # entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -73,13 +75,13 @@ mac:
   # Code signing configuration (optional via environment variables)
   # Set CSC_NAME to enable signing: export CSC_NAME="Developer ID Application: Your Name (TEAM_ID)"
   # If not set, builds will be unsigned (works for CI/CD)
-  identity: ${env.CSC_NAME}
+  identity: null
   # Notarization (optional, requires Apple Developer account)
   # Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID environment variables to enable
   # electron-builder will automatically enable notarization when APPLE_TEAM_ID is set
   # If not set, notarization is skipped (works for CI/CD)
-  notarize:
-    teamId: ${env.APPLE_TEAM_ID}
+  # notarize:
+  #   teamId: ${env.APPLE_TEAM_ID}
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
@@ -87,6 +89,8 @@ dmg:
   # electron-builder will automatically sign the app when CSC_NAME is set
   # This controls DMG container signing separately (usually not needed)
   sign: false
+  # Add writeUpdateInfo to skip code signature validation
+  writeUpdateInfo: false
 
 # ===== Windows Configuration =====
 win:
@@ -131,7 +135,7 @@ linux:
   vendor: MoodleBox Team
   synopsis: Local Moodle development environment
   description: |
-    MoodleBox is a cross-platform desktop application that simplifies 
+    MoodleBox is a cross-platform desktop application that simplifies
     local Moodle development environments with one-click Docker setup.
 
 appImage:

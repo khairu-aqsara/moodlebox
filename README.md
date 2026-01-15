@@ -41,12 +41,40 @@ Download the latest release for your platform:
 
 #### ⚠️ macOS Warning: Unsigned App
 
-MoodleBox is currently **unsigned** and may be blocked by macOS Gatekeeper. If you see a security warning:
+MoodleBox is currently **unsigned** and may be blocked by macOS Gatekeeper. If you see "MoodleBox is damaged" error:
 
-1. **Right-click** (or Control-click) the `.dmg` file
-2. Select **Open** from the context menu
-3. Click **Open** in the security dialog
-4. Alternatively, go to **System Settings → Privacy & Security** and click **Open Anyway** next to the blocked app message
+**Solution 1: Use Fix Script (Easiest)**
+
+```bash
+# Download and run the fix script:
+curl -O https://raw.githubusercontent.com/yourusername/ezadevbox/main/fix-macos-quarantine.sh
+chmod +x fix-macos-quarantine.sh
+./fix-macos-quarantine.sh
+```
+
+**Solution 2: Manual Command**
+
+```bash
+# After downloading the .dmg file, run this in Terminal:
+xattr -cr ~/Downloads/moodlebox-*.dmg
+
+# Then open the DMG normally
+```
+
+**Solution 3: After Installation**
+
+1. Try to open the `.dmg` file (you'll see the "damaged" error)
+2. Open **Terminal** and run:
+   ```bash
+   xattr -cr /Applications/MoodleBox.app
+   ```
+3. Now launch MoodleBox from Applications
+
+**Solution 4: System Settings**
+
+1. Try to open MoodleBox
+2. Go to **System Settings → Privacy & Security**
+3. Click **Open Anyway** next to the blocked app message
 
 After opening once, macOS will remember your choice and allow future launches.
 
