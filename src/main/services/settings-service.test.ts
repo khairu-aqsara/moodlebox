@@ -23,15 +23,13 @@ vi.mock('electron-store', () => {
     settings?: {
       theme: 'light' | 'dark'
       workspaceFolder: string
-      phpMyAdminPort: number
     }
   }
   class MockStore {
     private data: MockStoreData = {
       settings: {
         theme: 'dark',
-        workspaceFolder: '/tmp/test/MoodleBox',
-        phpMyAdminPort: 8081
+        workspaceFolder: '/tmp/test/MoodleBox'
       }
     }
 

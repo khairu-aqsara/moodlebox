@@ -11,7 +11,6 @@ import {
   FileText
 } from 'lucide-react'
 import { useProjectStore } from '../store/project-store'
-import { useSettingsStore } from '../store/settings-store'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from './ui/tooltip'
 import {
@@ -49,7 +48,6 @@ const ProjectCardComponent = ({ project }: ProjectCardProps): React.JSX.Element 
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const openFolder = useProjectStore((state) => state.openFolder)
   const openBrowser = useProjectStore((state) => state.openBrowser)
-  const phpMyAdminPort = useSettingsStore((state) => state.phpMyAdminPort)
 
   const statusConfig = STATUS_CONFIG[project.status]
 
@@ -79,8 +77,8 @@ const ProjectCardComponent = ({ project }: ProjectCardProps): React.JSX.Element 
   }, [openBrowser, project.port])
 
   const handleOpenPhpMyAdmin = useCallback((): void => {
-    window.open(`http://localhost:${phpMyAdminPort}`, '_blank')
-  }, [phpMyAdminPort])
+    window.open(`http://localhost:${project.phpMyAdminPort}`, '_blank')
+  }, [project.phpMyAdminPort])
 
   const handleViewLogs = useCallback(async (): Promise<void> => {
     setLogsDialogOpen(true)

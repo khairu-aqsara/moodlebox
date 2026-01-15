@@ -86,6 +86,7 @@ export function validateProjectCreate(project: unknown): Omit<Project, 'id' | 'c
   return {
     name: validateProjectName(p.name),
     port: validatePort(p.port),
+    phpMyAdminPort: validatePort(p.phpMyAdminPort),
     moodleVersion: validateMoodleVersion(p.moodleVersion),
     path: validatePath(p.path),
     status: p.status || 'stopped'

@@ -9,17 +9,14 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ onClose }: SettingsModalProps): React.JSX.Element {
-  const { theme, workspaceFolder, phpMyAdminPort, updateSettings, selectFolder } =
-    useSettingsStore()
+  const { theme, workspaceFolder, updateSettings, selectFolder } = useSettingsStore()
   const [localTheme, setLocalTheme] = useState(theme)
   const [localFolder, setLocalFolder] = useState(workspaceFolder)
-  const [localPhpMyAdminPort, setLocalPhpMyAdminPort] = useState(phpMyAdminPort)
 
   useEffect(() => {
     setLocalTheme(theme)
     setLocalFolder(workspaceFolder)
-    setLocalPhpMyAdminPort(phpMyAdminPort)
-  }, [theme, workspaceFolder, phpMyAdminPort])
+  }, [theme, workspaceFolder])
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -37,8 +34,7 @@ export function SettingsModal({ onClose }: SettingsModalProps): React.JSX.Elemen
   const handleSave = async (): Promise<void> => {
     await updateSettings({
       theme: localTheme,
-      workspaceFolder: localFolder,
-      phpMyAdminPort: localPhpMyAdminPort
+      workspaceFolder: localFolder
     })
     onClose()
   }
@@ -124,22 +120,6 @@ export function SettingsModal({ onClose }: SettingsModalProps): React.JSX.Elemen
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-
-          {/* phpMyAdmin Port */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">phpMyAdmin Port</label>
-            <p className="text-xs text-muted-foreground">
-              Port for accessing phpMyAdmin (default: 8081)
-            </p>
-            <input
-              type="number"
-              value={localPhpMyAdminPort}
-              onChange={(e) => setLocalPhpMyAdminPort(Number(e.target.value))}
-              min="1024"
-              max="65535"
-              className="w-full px-3 py-2 text-sm bg-muted/50 rounded-lg border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
           </div>
         </div>
 

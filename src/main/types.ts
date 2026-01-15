@@ -3,6 +3,7 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
+  phpMyAdminPort: number // External port for phpMyAdmin access
   dbPort?: number // External port for database access
   status:
     | 'provisioning'

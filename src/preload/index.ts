@@ -4,7 +4,6 @@ import { electronAPI } from '@electron-toolkit/preload'
 export interface AppSettings {
   theme: 'light' | 'dark'
   workspaceFolder: string
-  phpMyAdminPort: number
 }
 
 export interface Project {
@@ -12,6 +11,7 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
+  phpMyAdminPort: number
   status:
     | 'provisioning'
     | 'installing'

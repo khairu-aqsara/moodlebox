@@ -93,7 +93,7 @@ export class ComposeGenerator {
   phpmyadmin:
     image: phpmyadmin:latest
     ports:
-      - "${project.port + 1}:80"
+      - "${project.phpMyAdminPort}:80"
     environment:
       - PMA_HOST=db
       - PMA_USER=root
