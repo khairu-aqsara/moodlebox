@@ -350,12 +350,14 @@ describe('validateProjectCreate', () => {
     const validProject = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/Users/test/moodle'
     }
     expect(validateProjectCreate(validProject)).toEqual({
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/Users/test/moodle',
       status: 'stopped'
@@ -366,6 +368,7 @@ describe('validateProjectCreate', () => {
     const validProject = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '5.1',
       path: '/Users/test/moodle',
       status: 'ready' as const
@@ -373,6 +376,7 @@ describe('validateProjectCreate', () => {
     expect(validateProjectCreate(validProject)).toEqual({
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '5.1',
       path: '/Users/test/moodle',
       status: 'ready'
@@ -383,6 +387,7 @@ describe('validateProjectCreate', () => {
     const projectWithoutStatus = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/Users/test/moodle'
     }
@@ -428,6 +433,7 @@ describe('validateProjectCreate', () => {
       validateProjectCreate({
         name: 'Test Project',
         port: 8080,
+        phpMyAdminPort: 8081,
         moodleVersion: 'invalid',
         path: '/Users/test/moodle'
       })
@@ -439,6 +445,7 @@ describe('validateProjectCreate', () => {
       validateProjectCreate({
         name: 'Test Project',
         port: 8080,
+        phpMyAdminPort: 8081,
         moodleVersion: '4.4',
         path: 'x'.repeat(501)
       })

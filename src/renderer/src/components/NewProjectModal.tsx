@@ -53,31 +53,42 @@ interface NewProjectModalProps {
 }
 
 // Validation schema for project creation
-const projectSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Project name is required')
-    .max(100, 'Project name must be 100 characters or less')
-    .regex(
-      /^[a-zA-Z0-9\s\-_]+$/,
-      'Project name can only contain letters, numbers, spaces, hyphens, and underscores'
-    )
-    .refine(
-      (val) => !val.startsWith(' ') && !val.endsWith(' '),
-      'Project name cannot start or end with spaces'
-    ),
-  port: z
-    .number()
-    .int('Port must be an integer')
-    .min(1024, 'Port must be 1024 or higher (ports below 1024 require root privileges)')
-    .max(65535, 'Port must be 65535 or lower'),
-  moodleVersion: z.string().min(1, 'Moodle version is required')
-})
+const projectSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Project name is required')
+      .max(100, 'Project name must be 100 characters or less')
+      .regex(
+        /^[a-zA-Z0-9\s\-_]+$/,
+        'Project name can only contain letters, numbers, spaces, hyphens, and underscores'
+      )
+      .refine(
+        (val) => !val.startsWith(' ') && !val.endsWith(' '),
+        'Project name cannot start or end with spaces'
+      ),
+    port: z
+      .number()
+      .int('Port must be an integer')
+      .min(1024, 'Port must be 1024 or higher (ports below 1024 require root privileges)')
+      .max(65535, 'Port must be 65535 or lower'),
+    phpMyAdminPort: z
+      .number()
+      .int('Port must be an integer')
+      .min(1024, 'Port must be 1024 or higher (ports below 1024 require root privileges)')
+      .max(65535, 'Port must be 65535 or lower'),
+    moodleVersion: z.string().min(1, 'Moodle version is required')
+  })
+  .refine((data) => data.port !== data.phpMyAdminPort, {
+    message: 'phpMyAdmin port must be different from Moodle port',
+    path: ['phpMyAdminPort']
+  })
 
 export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.Element {
   const [projectName, setProjectName] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
   const [port, setPort] = useState('8080')
+  const [phpMyAdminPort, setPhpMyAdminPort] = useState('8081')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const addProject = useProjectStore((state) => state.addProject)
   const loadSettings = useSettingsStore((state) => state.loadSettings)
@@ -106,6 +117,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
     const validationResult = projectSchema.safeParse({
       name: projectName.trim(),
       port: parseInt(port, 10),
+      phpMyAdminPort: parseInt(phpMyAdminPort, 10),
       moodleVersion: selectedVersion
     })
 
@@ -139,6 +151,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
         name: projectName.trim(),
         moodleVersion: selectedVersion,
         port: portNum,
+        phpMyAdminPort: parseInt(phpMyAdminPort, 10),
         status: 'stopped',
         path: projectPath
       })
@@ -247,13 +260,18 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="port">Port</Label>
+            <Label htmlFor="port">Moodle Port</Label>
             <Input
               id="port"
               type="number"
               value={port}
               onChange={(e) => {
                 setPort(e.target.value)
+                // Auto-update phpMyAdmin port to be port + 1
+                const newPort = parseInt(e.target.value, 10)
+                if (!isNaN(newPort) && newPort >= 1024 && newPort < 65535) {
+                  setPhpMyAdminPort(String(newPort + 1))
+                }
                 if (errors.port) setErrors({ ...errors, port: '' })
               }}
               className={errors.port ? 'border-destructive' : ''}
@@ -272,12 +290,41 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
             </p>
           </div>
 
+          <div className="grid gap-2">
+            <Label htmlFor="phpMyAdminPort">phpMyAdmin Port</Label>
+            <Input
+              id="phpMyAdminPort"
+              type="number"
+              value={phpMyAdminPort}
+              onChange={(e) => {
+                setPhpMyAdminPort(e.target.value)
+                if (errors.phpMyAdminPort) setErrors({ ...errors, phpMyAdminPort: '' })
+              }}
+              className={errors.phpMyAdminPort ? 'border-destructive' : ''}
+              min={1024}
+              max={65535}
+              aria-invalid={!!errors.phpMyAdminPort}
+              aria-describedby={
+                errors.phpMyAdminPort ? 'phpmyadmin-port-error' : 'phpmyadmin-port-help'
+              }
+            />
+            {errors.phpMyAdminPort && (
+              <p id="phpmyadmin-port-error" className="text-xs text-destructive" role="alert">
+                {errors.phpMyAdminPort}
+              </p>
+            )}
+            <p id="phpmyadmin-port-help" className="text-xs text-muted-foreground">
+              phpMyAdmin will be available at http://localhost:{phpMyAdminPort || '8081'}
+            </p>
+          </div>
+
           {selectedVersionData && (
             <div className="rounded-lg bg-muted p-3 text-sm">
               <p className="font-medium mb-1">Auto-configured:</p>
               <ul className="text-muted-foreground space-y-1">
                 <li>• PHP {selectedVersionData.requirements.php}</li>
-                <li>• Mysql {selectedVersionData.requirements.mysql}</li>
+                <li>• MySQL {selectedVersionData.requirements.mysql}</li>
+                <li>• phpMyAdmin on port {phpMyAdminPort || '8081'}</li>
               </ul>
             </div>
           )}

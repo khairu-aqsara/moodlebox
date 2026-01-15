@@ -31,8 +31,9 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
     try {
       const isRunning = await window.api.projects.checkDocker()
       setDockerError(!isRunning)
-    } catch {
-      // Docker check failed - assume Docker is not available
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Docker check failed:', errorMessage)
       setDockerError(true)
     } finally {
       setIsCheckingDocker(false)
@@ -44,15 +45,17 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
     checkDocker()
 
     // Sync project states when window gains focus
-    // This handles the case where Docker was started after app launch
+    // This handles case where Docker was started after app launch
     // or containers were started/stopped outside the app
-    // Note: syncStates() is now debounced on the backend, so multiple calls are safe
+    // Note: syncStates() is now debounced on backend, so multiple calls are safe
     const syncOnFocus = async (): Promise<void> => {
       try {
         await window.api.projects.syncStates()
         await loadProjects() // Reload to get updated states
-      } catch {
-        // Silently fail - sync happens on startup anyway
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+        console.warn('Failed to sync project states on focus:', errorMessage)
+        // Non-critical - sync happens on startup anyway
       }
     }
 

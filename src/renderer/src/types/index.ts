@@ -27,6 +27,7 @@ export interface Project {
   name: string
   moodleVersion: string
   port: number
+  phpMyAdminPort: number
   status:
     | 'provisioning'
     | 'installing'

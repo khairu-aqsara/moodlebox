@@ -6,7 +6,6 @@ import log from 'electron-log'
 export interface AppSettings {
   theme: 'light' | 'dark'
   workspaceFolder: string
-  phpMyAdminPort: number
 }
 
 interface SettingsStoreSchema {
@@ -33,8 +32,7 @@ export class SettingsService {
         defaults: {
           settings: {
             theme: 'dark',
-            workspaceFolder: defaultWorkspaceFolder,
-            phpMyAdminPort: 8081
+            workspaceFolder: defaultWorkspaceFolder
           }
         }
       }) as Store<SettingsStoreSchema> & {

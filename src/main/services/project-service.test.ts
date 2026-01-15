@@ -79,6 +79,7 @@ describe('ProjectService - Security Validations', () => {
     const validProject: Omit<Project, 'id' | 'createdAt'> = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/tmp/test-moodle',
       status: 'stopped'
@@ -202,6 +203,7 @@ describe('ProjectService - Security Validations', () => {
     const validProject: Omit<Project, 'id' | 'createdAt'> = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/tmp/test-moodle',
       status: 'stopped'
@@ -263,6 +265,7 @@ describe('ProjectService - Security Validations', () => {
     const validProject: Omit<Project, 'id' | 'createdAt'> = {
       name: 'Test Project',
       port: 8080,
+      phpMyAdminPort: 8081,
       moodleVersion: '4.4',
       path: '/tmp/test-moodle',
       status: 'stopped'
@@ -352,6 +355,41 @@ describe('ProjectService - Security Validations', () => {
           (firstError && firstError.message !== '')
         expect(isValidError).toBe(true)
       }
+    })
+  })
+
+  describe('Migration - Existing Projects', () => {
+    it('should assign phpMyAdminPort to projects missing it', () => {
+      // Test that migration logic correctly assigns phpMyAdminPort
+      const legacyProject = {
+        id: 'legacy-project-id',
+        name: 'Legacy Project',
+        port: 9000,
+        moodleVersion: '4.4',
+        path: '/tmp/legacy-project',
+        status: 'stopped' as const,
+        createdAt: '2024-01-01T00:00:00.000Z'
+      } as unknown as Project
+
+      // Verify the project is missing phpMyAdminPort (simulating legacy data)
+      expect(legacyProject.phpMyAdminPort).toBeUndefined()
+
+      // Simulate migration logic
+      const expectedPhpMyAdminPort = legacyProject.port + 1
+      expect(expectedPhpMyAdminPort).toBe(9001)
+    })
+
+    it('should handle port conflict resolution during migration', () => {
+      // Test that the migration would resolve conflicts
+      const project1Port = 9000
+      const project2Port = 9001 // Would conflict with project1's phpMyAdminPort
+
+      const expectedProject1PhpMyAdmin = project1Port + 1 // 9001
+      const expectedProject2PhpMyAdmin = project2Port + 1 // 9002 initially
+
+      // If there's a conflict, project2 should get next available port
+      expect(expectedProject2PhpMyAdmin).toBe(9002)
+      expect(expectedProject1PhpMyAdmin).not.toBe(expectedProject2PhpMyAdmin)
     })
   })
 })

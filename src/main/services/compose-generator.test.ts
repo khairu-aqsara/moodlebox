@@ -9,6 +9,7 @@ describe('ComposeGenerator', () => {
     id: 'test-project-id',
     name: 'Test Project',
     port: 8080,
+    phpMyAdminPort: 8081,
     moodleVersion: '4.4',
     path: '/Users/test/moodle',
     status: 'stopped',
@@ -148,10 +149,10 @@ describe('ComposeGenerator', () => {
       expect(output).toContain('"3306:3306"')
     })
 
-    it('should increment port for phpMyAdmin', () => {
+    it('should use phpMyAdminPort for phpMyAdmin', () => {
       const output = generator.generate(mockProject, mockVersion44)
 
-      expect(output).toContain('"8081:80"') // port + 1
+      expect(output).toContain('"8081:80"') // phpMyAdminPort
     })
 
     it('should include correct Moodle environment variables', () => {
@@ -215,19 +216,17 @@ describe('ComposeGenerator', () => {
 
   describe('Edge Cases', () => {
     it('should handle minimum port (1024)', () => {
-      const project = { ...mockProject, port: 1024 }
+      const project = { ...mockProject, port: 1024, phpMyAdminPort: 1025 }
       const output = generator.generate(project, mockVersion44)
 
-      expect(output).toContain('"1024:80"')
-      expect(output).toContain('"1025:80"') // phpMyAdmin port + 1
+      expect(output).toContain('"1025:80"') // phpMyAdmin port
     })
 
     it('should handle maximum port (65534)', () => {
-      const project = { ...mockProject, port: 65534 }
+      const project = { ...mockProject, port: 65534, phpMyAdminPort: 65535 }
       const output = generator.generate(project, mockVersion44)
 
-      expect(output).toContain('"65534:80"')
-      expect(output).toContain('"65535:80"') // phpMyAdmin port + 1
+      expect(output).toContain('"65535:80"') // phpMyAdmin port
     })
 
     it('should handle long project names in compose file', () => {

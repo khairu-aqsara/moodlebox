@@ -54,6 +54,71 @@ export class ProjectService {
     this.store = rawStore as TypedStore
     this.composeGenerator = new ComposeGenerator()
     this.dockerService = new DockerService()
+
+    // Migrate existing projects to add phpMyAdminPort if missing
+    this.migrateExistingProjects()
+  }
+
+  /**
+   * Migrate existing projects to add phpMyAdminPort field
+   *
+   * This ensures backward compatibility for projects created before
+   * the phpMyAdminPort field was added. For existing projects:
+   * - Assigns phpMyAdminPort = port + 1 (legacy behavior)
+   * - Handles port conflicts by finding next available port
+   * - Updates docker-compose.yml if it exists
+   *
+   * This method is idempotent - safe to run multiple times.
+   */
+  private migrateExistingProjects(): void {
+    const projects = this.getAllProjects()
+    let migrationNeeded = false
+
+    const migratedProjects = projects.map((project) => {
+      // Check if project already has phpMyAdminPort
+      if (project.phpMyAdminPort !== undefined) {
+        return project
+      }
+
+      migrationNeeded = true
+      log.info(`Migrating project "${project.name}" to add phpMyAdminPort`)
+
+      // Assign phpMyAdminPort = port + 1 (legacy behavior)
+      let phpMyAdminPort = project.port + 1
+
+      // Check for conflicts with other projects
+      const existingPorts = projects
+        .filter((p) => p.id !== project.id && p.phpMyAdminPort !== undefined)
+        .map((p) => p.phpMyAdminPort)
+
+      // Find next available port if there's a conflict
+      while (existingPorts.includes(phpMyAdminPort)) {
+        phpMyAdminPort++
+        // Safety check to prevent infinite loop
+        if (phpMyAdminPort > PORTS.MAX_PORT) {
+          log.warn(
+            `Could not find available phpMyAdmin port for project "${project.name}", using ${project.port + 1}`
+          )
+          phpMyAdminPort = project.port + 1
+          break
+        }
+      }
+
+      log.info(`Assigned phpMyAdminPort ${phpMyAdminPort} to project "${project.name}"`)
+
+      return {
+        ...project,
+        phpMyAdminPort
+      }
+    })
+
+    // Save migrated projects back to store if any migrations were needed
+    if (migrationNeeded) {
+      this.store.set('projects', migratedProjects)
+      log.info(
+        `Migration completed: ${migratedProjects.filter((p) => p.phpMyAdminPort !== undefined).length} projects updated`
+      )
+    }
   }
 
   /**
@@ -483,6 +548,7 @@ export class ProjectService {
   async createProject(project: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
     // Validate port range and reserved ports
     this.validatePort(project.port)
+    this.validatePort(project.phpMyAdminPort)
 
     // Validate and sanitize project path to prevent path traversal
     // Reject paths with traversal attempts to protect against security vulnerabilities
@@ -578,12 +644,40 @@ export class ProjectService {
       )
     }
 
+    // Check for phpMyAdmin port conflicts with existing projects
+    const phpMyAdminPortConflict = existingProjects.find(
+      (p) => p.phpMyAdminPort === project.phpMyAdminPort
+    )
+    if (phpMyAdminPortConflict) {
+      throw new Error(
+        `phpMyAdmin port ${project.phpMyAdminPort} is already in use by project "${phpMyAdminPortConflict.name}".\n\n` +
+          `Please choose a different port (e.g., ${project.phpMyAdminPort + 1}) or stop/delete the existing project.`
+      )
+    }
+
+    // Check if phpMyAdmin port conflicts with Moodle port
+    if (project.phpMyAdminPort === project.port) {
+      throw new Error(
+        `phpMyAdmin port ${project.phpMyAdminPort} cannot be the same as Moodle port ${project.port}.\n\n` +
+          `Please choose a different port for phpMyAdmin.`
+      )
+    }
+
     // Check if port is available on the system
     const portAvailable = await this.dockerService.checkPort(project.port)
     if (!portAvailable) {
       throw new Error(
         `Port ${project.port} is already in use by another application.\n\n` +
           `Please choose a different port or stop the application using port ${project.port}.`
+      )
+    }
+
+    // Check if phpMyAdmin port is available on the system
+    const phpMyAdminPortAvailable = await this.dockerService.checkPort(project.phpMyAdminPort)
+    if (!phpMyAdminPortAvailable) {
+      throw new Error(
+        `phpMyAdmin port ${project.phpMyAdminPort} is already in use by another application.\n\n` +
+          `Please choose a different port or stop the application using port ${project.phpMyAdminPort}.`
       )
     }
 
@@ -783,11 +877,27 @@ export class ProjectService {
       throw new Error(`A project already exists at "${newPath}".`)
     }
 
+    // Generate phpMyAdmin port (newPort + 1, but ensure it's available)
+    let phpMyAdminPort = newPort + 1
+    const phpMyAdminPortConflict = existingProjects.find((p) => p.phpMyAdminPort === phpMyAdminPort)
+    if (phpMyAdminPortConflict) {
+      // Find next available port
+      phpMyAdminPort = newPort + 2
+      while (
+        existingProjects.some(
+          (p) => p.phpMyAdminPort === phpMyAdminPort || p.port === phpMyAdminPort
+        )
+      ) {
+        phpMyAdminPort++
+      }
+    }
+
     // Create new project with same configuration but new name/port
     const duplicatedProject: Omit<Project, 'id' | 'createdAt'> = {
       name: newName,
       moodleVersion: sourceProject.moodleVersion,
       port: newPort,
+      phpMyAdminPort,
       status: 'stopped',
       path: newPath
     }
@@ -803,7 +913,7 @@ export class ProjectService {
       // Replace port numbers in docker-compose.yml
       const updatedCompose = composeContent
         .replace(new RegExp(`"${sourceProject.port}:80"`, 'g'), `"${newPort}:80"`)
-        .replace(new RegExp(`"${(sourceProject.port || 8080) + 1}:80"`, 'g'), `"${newPort + 1}:80"`)
+        .replace(new RegExp(`"${sourceProject.phpMyAdminPort}:80"`, 'g'), `"${phpMyAdminPort}:80"`)
 
       await fs.writeFile(join(newPath, 'docker-compose.yml'), updatedCompose)
     } catch (error) {

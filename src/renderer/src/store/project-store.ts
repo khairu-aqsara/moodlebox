@@ -17,42 +17,87 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   projects: [],
 
   loadProjects: async () => {
-    const projects = await window.api.projects.getAll()
-    set({ projects })
+    try {
+      const projects = await window.api.projects.getAll()
+      set({ projects })
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to load projects:', errorMessage)
+      set({ projects: [] })
+    }
   },
 
   addProject: async (project) => {
-    const newProject = await window.api.projects.create(project)
-    set((state) => ({ projects: [...state.projects, newProject] }))
+    try {
+      const newProject = await window.api.projects.create(project)
+      set((state) => ({ projects: [...state.projects, newProject] }))
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to add project:', errorMessage)
+      throw error
+    }
   },
 
   updateProject: (id, updates) => {
-    set((state) => ({
-      projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    }))
+    try {
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      }))
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to update project:', errorMessage)
+    }
   },
 
   deleteProject: async (id) => {
-    await window.api.projects.delete(id)
-    set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id)
-    }))
+    try {
+      await window.api.projects.delete(id)
+      set((state) => ({
+        projects: state.projects.filter((p) => p.id !== id)
+      }))
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to delete project:', errorMessage)
+      throw error
+    }
   },
 
   startProject: async (id) => {
-    await window.api.projects.start(id)
+    try {
+      await window.api.projects.start(id)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to start project:', errorMessage)
+      throw error
+    }
   },
 
   stopProject: async (id) => {
-    await window.api.projects.stop(id)
+    try {
+      await window.api.projects.stop(id)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to stop project:', errorMessage)
+      throw error
+    }
   },
 
   openFolder: async (path) => {
-    await window.api.projects.openFolder(path)
+    try {
+      await window.api.projects.openFolder(path)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to open folder:', errorMessage)
+    }
   },
 
   openBrowser: async (port) => {
-    await window.api.projects.openBrowser(port)
+    try {
+      await window.api.projects.openBrowser(port)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to open browser:', errorMessage)
+    }
   }
 }))
 
@@ -78,9 +123,19 @@ const setupIPCListeners = (): void => {
 
   // Set up project state update listener
   updateListenerCleanup = window.api.projects.onProjectUpdate(({ id, updates }) => {
-    useProjectStore.setState((state) => ({
-      projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    }))
+    try {
+      const state = useProjectStore.getState()
+      if (!state.projects) {
+        console.warn('Received project update but projects array is undefined')
+        return
+      }
+      useProjectStore.setState(() => ({
+        projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      }))
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Failed to process project update:', errorMessage)
+    }
   })
 }
 
