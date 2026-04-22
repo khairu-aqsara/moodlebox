@@ -993,8 +993,12 @@ export class ProjectService {
     const project = this.getProject(id)
     if (!project) throw new Error('Project not found')
 
-    // Get version data for download URL
-    const version = this.versionsData?.releases.find((r) => r.version === project.moodleVersion)
+    // Get version data — support both "5.2" (new) and "5.2.0" (legacy) stored formats
+    const version = this.versionsData?.releases.find(
+      (r) =>
+        r.version === project.moodleVersion ||
+        project.moodleVersion.startsWith(r.version + '.')
+    )
     if (!version) {
       throw new Error(`Version ${project.moodleVersion} not found`)
     }
@@ -1045,7 +1049,7 @@ export class ProjectService {
       const { LifecycleManager } = await import('./lifecycle-manager')
       const lifecycleManager = new LifecycleManager()
 
-      await lifecycleManager.startProject(project, version.download, version, onStatusUpdate, onLog)
+      await lifecycleManager.startProject(project, version, onStatusUpdate, onLog)
     } catch (err: unknown) {
       // Error already handled by lifecycle manager, but ensure state is updated
       const errorMessage = err instanceof Error ? err.message : String(err)

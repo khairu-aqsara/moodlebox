@@ -7,6 +7,70 @@ import log from 'electron-log'
 import { getAssetPath } from '../utils/asset-path'
 import { HTTP_WAIT } from '../constants'
 
+/**
+ * Query GitHub tags API and return the latest stable tag for a given major.minor version.
+ * e.g. "5.2" → "v5.2.1" (or whatever the current latest patch is)
+ *
+ * Paginates up to 5 pages (500 tags) scanning for stable tags matching vMAJOR.MINOR.PATCH.
+ * "Stable" means the suffix after the prefix is a pure integer (no rc/beta/alpha qualifiers).
+ * Returns the tag name with the highest patch number found across all scanned pages.
+ */
+export async function resolveLatestTag(majorMinor: string): Promise<string> {
+  const [major, minor] = majorMinor.split('.')
+  const prefix = `v${major}.${minor}.`
+  let bestTag: string | null = null
+  let bestPatch = -1
+
+  for (let page = 1; page <= 5; page++) {
+    const controller = new AbortController()
+    let timeoutId: NodeJS.Timeout | null = setTimeout(() => controller.abort(), 10000)
+
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/moodle/moodle/tags?per_page=100&page=${page}`,
+        {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'MoodleBox/1.0' }
+        } as Parameters<typeof fetch>[1]
+      )
+
+      clearTimeout(timeoutId)
+      timeoutId = null
+
+      if (!response.ok) {
+        throw new Error(`GitHub API responded with ${response.status}`)
+      }
+
+      const tags = (await response.json()) as Array<{ name: string }>
+
+      for (const tag of tags) {
+        if (tag.name.startsWith(prefix)) {
+          const suffix = tag.name.slice(prefix.length)
+          // Only stable releases — suffix must be a plain integer (no rc/beta/alpha)
+          if (/^\d+$/.test(suffix)) {
+            const patch = parseInt(suffix, 10)
+            if (patch > bestPatch) {
+              bestPatch = patch
+              bestTag = tag.name
+            }
+          }
+        }
+      }
+
+      if (tags.length < 100) break // Last page
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId)
+      throw err
+    }
+  }
+
+  if (!bestTag) {
+    throw new Error(`No stable release found for Moodle ${majorMinor} on GitHub`)
+  }
+
+  return bestTag
+}
+
 export class LifecycleManager {
   private downloader: MoodleDownloader
   private installer: MoodleInstaller
@@ -23,7 +87,6 @@ export class LifecycleManager {
    */
   async startProject(
     project: Project,
-    moodleDownloadUrl: string,
     version: MoodleVersion,
     onStatusUpdate: (
       status: Project['status'],
@@ -36,7 +99,7 @@ export class LifecycleManager {
     const isFirstRun = !(await this.downloader.isDownloaded(project.path))
     try {
       if (isFirstRun) {
-        await this.firstRunFlow(project, moodleDownloadUrl, version, onStatusUpdate, onLog)
+        await this.firstRunFlow(project, version, onStatusUpdate, onLog)
       } else {
         await this.subsequentRunFlow(project, version, onStatusUpdate, onLog)
       }
@@ -53,7 +116,6 @@ export class LifecycleManager {
    */
   private async firstRunFlow(
     project: Project,
-    moodleDownloadUrl: string,
     version: MoodleVersion,
     onStatusUpdate: (
       status: Project['status'],
@@ -67,6 +129,13 @@ export class LifecycleManager {
     const alreadyDownloaded = await this.downloader.isDownloaded(project.path)
 
     if (!alreadyDownloaded) {
+      // Resolve latest stable tag from GitHub before downloading
+      onStatusUpdate('provisioning', undefined, `Resolving latest Moodle ${version.version} release...`)
+      onLog?.(`🔍 Resolving latest Moodle ${version.version} release from GitHub...`)
+      const tag = await resolveLatestTag(version.version)
+      const moodleDownloadUrl = `https://github.com/moodle/moodle/archive/refs/tags/${tag}.zip`
+      onLog?.(`✓ Resolved: ${tag}`)
+
       onStatusUpdate('provisioning', undefined, 'Downloading Moodle source code...')
       onLog?.('📥 Downloading Moodle source code...')
       onLog?.(

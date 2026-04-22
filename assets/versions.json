@@ -2,10 +2,9 @@
   "latest_update": "2026-04-22",
   "releases": [
     {
-      "version": "5.2.0",
+      "version": "5.2",
       "changelog": "https://moodledev.io/general/releases/5.2",
       "type": "stable",
-      "download": "https://github.com/moodle/moodle/archive/refs/tags/v5.2.0.zip",
       "requirements": {
         "php": "8.3",
         "mysql": "8.4",
@@ -15,10 +14,9 @@
       "composer": true
     },
     {
-      "version": "5.1.0",
+      "version": "5.1",
       "changelog": "https://moodledev.io/general/releases/5.1",
       "type": "stable",
-      "download": "https://github.com/moodle/moodle/archive/refs/tags/v5.1.0.zip",
       "requirements": {
         "php": "8.3",
         "mysql": "8.4",
@@ -28,10 +26,9 @@
       "composer": true
     },
     {
-      "version": "5.0.3",
-      "changelog": "https://moodledev.io/general/releases/5.0/5.0.3",
+      "version": "5.0",
+      "changelog": "https://moodledev.io/general/releases/5.0",
       "type": "stable",
-      "download": "https://github.com/moodle/moodle/archive/refs/tags/v5.0.3.zip",
       "requirements": {
         "php": "8.2",
         "mysql": "8.4",
@@ -41,10 +38,9 @@
       "composer": false
     },
     {
-      "version": "4.5.7",
-      "changelog": "https://moodledev.io/general/releases/4.5/4.5.7",
+      "version": "4.5",
+      "changelog": "https://moodledev.io/general/releases/4.5",
       "type": "lts",
-      "download": "https://github.com/moodle/moodle/archive/refs/tags/v4.5.7.zip",
       "requirements": {
         "php": "8.1",
         "mysql": "8.0",

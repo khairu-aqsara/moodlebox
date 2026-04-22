@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const MoodleVersionSchema = z.object({
   version: z.string(),
   type: z.enum(['lts', 'stable']),
-  download: z.string(),
+  download: z.string().optional(),
   requirements: z.object({
     php: z.string(),
     mariadb: z.string().optional(),
@@ -11,6 +11,7 @@ export const MoodleVersionSchema = z.object({
     postgres: z.string()
   }),
   webroot: z.string().optional(),
+  router: z.boolean().optional(),
   composer: z.boolean().optional()
 })
 
