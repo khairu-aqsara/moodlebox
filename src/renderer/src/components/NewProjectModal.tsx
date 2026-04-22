@@ -16,6 +16,15 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 
+// Find the lowest port >= startFrom that isn't in the used set
+function findNextAvailablePort(usedPorts: Set<number>, startFrom: number): number {
+  let candidate = startFrom
+  while (usedPorts.has(candidate)) {
+    candidate++
+  }
+  return candidate
+}
+
 // Helper function to join paths cross-platform (renderer-safe)
 // Preserves absolute paths (leading / on Unix, drive letter on Windows)
 function joinPath(...parts: string[]): string {
@@ -87,8 +96,18 @@ const projectSchema = z
 export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.Element {
   const [projectName, setProjectName] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
-  const [port, setPort] = useState('8080')
-  const [phpMyAdminPort, setPhpMyAdminPort] = useState('8081')
+  const [port, setPort] = useState(() => {
+    const { projects } = useProjectStore.getState()
+    const used = new Set(projects.flatMap((p) => [p.port, p.phpMyAdminPort]))
+    return String(findNextAvailablePort(used, 8080))
+  })
+  const [phpMyAdminPort, setPhpMyAdminPort] = useState(() => {
+    const { projects } = useProjectStore.getState()
+    const used = new Set(projects.flatMap((p) => [p.port, p.phpMyAdminPort]))
+    const moodlePort = findNextAvailablePort(used, 8080)
+    used.add(moodlePort)
+    return String(findNextAvailablePort(used, moodlePort + 1))
+  })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const addProject = useProjectStore((state) => state.addProject)
   const loadSettings = useSettingsStore((state) => state.loadSettings)
@@ -97,6 +116,9 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  const existingProjects = useProjectStore((state) => state.projects)
+  const usedPorts = new Set(existingProjects.flatMap((p) => [p.port, p.phpMyAdminPort]))
 
   const versions = versionManager.getAllVersions()
   const selectedVersionData = selectedVersion
@@ -195,7 +217,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 py-4 overflow-y-auto">
           {errors.general && (
             <div className="rounded-lg bg-destructive/15 border border-destructive/50 p-3 text-sm text-destructive">
               {errors.general}
@@ -257,6 +279,9 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
                 {errors.moodleVersion}
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              Always installs the latest patch release, fetched from GitHub on first start.
+            </p>
           </div>
 
           <div className="grid gap-2">
@@ -270,7 +295,8 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
                 // Auto-update phpMyAdmin port to be port + 1
                 const newPort = parseInt(e.target.value, 10)
                 if (!isNaN(newPort) && newPort >= 1024 && newPort < 65535) {
-                  setPhpMyAdminPort(String(newPort + 1))
+                  const usedForPhp = new Set([...usedPorts, newPort])
+                  setPhpMyAdminPort(String(findNextAvailablePort(usedForPhp, newPort + 1)))
                 }
                 if (errors.port) setErrors({ ...errors, port: '' })
               }}
