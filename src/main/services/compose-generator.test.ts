@@ -27,6 +27,18 @@ describe('ComposeGenerator', () => {
     }
   }
 
+  const mockVersion50 = {
+    version: '5.0',
+    type: 'stable' as const,
+    download: 'https://download.moodle.org/download.php/direct/stable500/moodle-5.0.tgz',
+    requirements: {
+      php: '8.3',
+      mysql: '8.4',
+      postgres: '16'
+    },
+    router: true
+  }
+
   const mockVersion51 = {
     version: '5.1',
     type: 'stable' as const,
@@ -36,7 +48,8 @@ describe('ComposeGenerator', () => {
       mysql: '8.0',
       postgres: '13'
     },
-    webroot: 'public'
+    webroot: 'public',
+    router: true
   }
 
   describe('generate', () => {
@@ -56,8 +69,8 @@ describe('ComposeGenerator', () => {
       expect(output).toContain('services:')
       expect(output).toContain('image: moodlehq/moodle-php-apache:8.2')
       expect(output).toContain('image: mysql:8.0')
-      expect(output).toContain('/var/www/html/public')
-      expect(output).toContain("sed -i 's|/var/www/html|/var/www/html/public|g'")
+      expect(output).toContain('./config/apache.conf:/etc/apache2/sites-available/000-default.conf')
+      expect(output).toContain('a2enmod rewrite headers')
     })
 
     it('should include all required services', () => {
@@ -134,6 +147,9 @@ describe('ComposeGenerator', () => {
       expect(output).toContain('- ./moodlecode:/var/www/html')
       expect(output).toContain('- ./moodledata:/var/www/moodledata')
       expect(output).toContain('- ./mysql_data:/var/lib/mysql')
+      expect(output).toContain('- ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini')
+      expect(output).toContain('- ./config/mysql.cnf:/etc/mysql/conf.d/moodlebox.cnf')
+      expect(output).toContain('- ./config/apache.conf:/etc/apache2/sites-available/000-default.conf')
     })
 
     it('should handle custom db port', () => {
@@ -166,12 +182,17 @@ describe('ComposeGenerator', () => {
 
     it('should handle Moodle 5.1 webroot override correctly', () => {
       const output = generator.generate(mockProject, mockVersion51)
+      expect(output).toContain('a2enmod rewrite headers')
+      expect(output).toContain('./config/apache.conf:/etc/apache2/sites-available/000-default.conf')
 
-      // Should include Apache config modification command
-      expect(output).toContain('command: /bin/bash -c')
-      expect(output).toContain('sed -i')
-      expect(output).toContain('/etc/apache2/sites-available/000-default.conf')
-      expect(output).toContain('/var/www/html/public')
+      const apacheConfig = generator.generateApacheConfig(mockVersion51)
+      expect(apacheConfig).toContain('DocumentRoot /var/www/html/public')
+      expect(apacheConfig).toContain('FallbackResource /r.php')
+    })
+
+    it('should not include FallbackResource for non-webroot versions', () => {
+      const apacheConfig = generator.generateApacheConfig(mockVersion44)
+      expect(apacheConfig).not.toContain('FallbackResource')
     })
 
     it('should handle Moodle 5.1 webroot in WWWROOT env vars', () => {
@@ -189,6 +210,49 @@ describe('ComposeGenerator', () => {
       expect(output).toContain('MYSQL_PASSWORD=moodle_dev_')
       expect(output).toContain('MYSQL_ROOT_PASSWORD=moodle_dev_')
       expect(output).toContain('PMA_PASSWORD=moodle_dev_')
+    })
+  })
+
+  describe('generateApacheConfig', () => {
+    it('should set DocumentRoot to /var/www/html for non-webroot versions', () => {
+      const config = generator.generateApacheConfig(mockVersion44)
+      expect(config).toContain('DocumentRoot /var/www/html')
+      expect(config).not.toContain('DocumentRoot /var/www/html/public')
+    })
+
+    it('should set DocumentRoot to /var/www/html/public for webroot versions', () => {
+      const config = generator.generateApacheConfig(mockVersion51)
+      expect(config).toContain('DocumentRoot /var/www/html/public')
+    })
+
+    it('should include security rewrite rules for all versions', () => {
+      const config = generator.generateApacheConfig(mockVersion44)
+      expect(config).toContain('RewriteEngine On')
+      expect(config).toContain('(\\/vendor\\/)')
+      expect(config).toContain('(\\/node_modules\\/)')
+      expect(config).toContain('(composer\\.json)')
+      expect(config).toContain('[L,R=404]')
+    })
+
+    it('should include FallbackResource to r.php for webroot versions', () => {
+      const config = generator.generateApacheConfig(mockVersion51)
+      expect(config).toContain('FallbackResource /r.php')
+    })
+
+    it('should not include FallbackResource for non-webroot versions', () => {
+      const config = generator.generateApacheConfig(mockVersion44)
+      expect(config).not.toContain('FallbackResource')
+    })
+
+    it('should include FallbackResource for router versions without webroot (e.g. 5.0, 4.5)', () => {
+      const config = generator.generateApacheConfig(mockVersion50)
+      expect(config).toContain('FallbackResource /r.php')
+    })
+
+    it('should keep DocumentRoot at /var/www/html for router versions without webroot', () => {
+      const config = generator.generateApacheConfig(mockVersion50)
+      expect(config).toContain('DocumentRoot /var/www/html')
+      expect(config).not.toContain('DocumentRoot /var/www/html/public')
     })
   })
 

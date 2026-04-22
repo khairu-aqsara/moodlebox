@@ -203,17 +203,7 @@ export class LifecycleManager {
       await this.installer.install(project.path, project.name, project.port, version, onLog)
       onLog?.('✓ Moodle installed successfully')
 
-      // 5. Configure - Disable password policy
-      onStatusUpdate('installing', undefined, 'Configuring Moodle...')
-      onLog?.('⚙️  Configuring Moodle...')
-      try {
-        await this.installer.disablePasswordPolicy(project.path)
-        onLog?.('✓ Password policy disabled')
-      } catch (err) {
-        onLog?.(`⚠️  Warning: Could not disable password policy: ${err}`)
-      }
-
-      // 6. Restore sample course
+      // 5. Restore sample course
       onStatusUpdate('installing', undefined, 'Restoring sample course...')
       onLog?.('📚 Restoring sample course...')
       try {

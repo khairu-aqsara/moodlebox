@@ -42,6 +42,7 @@ export interface MoodleVersion {
     postgres: string
   }
   webroot?: string // e.g., "public" for Moodle 5.1+
+  router?: boolean // Whether Moodle's router (r.php) is available — true for 4.5+
   composer?: boolean // Whether Composer is required for this version
 }
 

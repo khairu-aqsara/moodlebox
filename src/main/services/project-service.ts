@@ -1,4 +1,4 @@
-import { Project, VersionsData, ProgressInfo } from '../types'
+import { Project, VersionsData, ProgressInfo, MoodleVersion } from '../types'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import { DockerService } from './docker-service'
@@ -792,6 +792,9 @@ export class ProjectService {
     const composeContent = this.composeGenerator.generate(newProject, version)
     await fs.writeFile(join(normalizedProjectPath, 'docker-compose.yml'), composeContent)
 
+    // Create config directory and default config files
+    await this.createConfigFiles(normalizedProjectPath, version)
+
     // Save to store
     const projects = this.getAllProjects()
     this.store.set('projects', [...projects, newProject])
@@ -1130,5 +1133,45 @@ export class ProjectService {
         reject(err)
       })
     })
+  }
+
+  private async createConfigFiles(projectPath: string, version: MoodleVersion): Promise<void> {
+    const configDir = join(projectPath, 'config')
+    await fs.mkdir(configDir, { recursive: true })
+
+    const apacheConf = this.composeGenerator.generateApacheConfig(version)
+    await fs.writeFile(join(configDir, 'apache.conf'), apacheConf)
+
+    const phpIni = `; MoodleBox - PHP configuration
+; Edit this file and restart the moodle container to apply changes:
+;   docker compose restart moodle
+;
+; These settings override the PHP defaults for both the web server and cron.
+; See https://docs.moodle.org/en/PHP for Moodle PHP requirements.
+
+display_errors = Off
+max_execution_time = 300
+max_input_vars = 5000
+memory_limit = 512M
+post_max_size = 128M
+upload_max_filesize = 128M
+`
+
+    const mysqlCnf = `[mysqld]
+# MoodleBox - Additional MySQL configuration
+# Edit this file and restart the database container to apply changes:
+#   docker compose restart db
+#
+# Performance settings are already configured via command-line flags in docker-compose.yml.
+# Use this file for additional settings such as slow query logging.
+#
+# Uncomment to enable slow query log:
+# slow_query_log = 1
+# slow_query_log_file = /var/log/mysql/slow.log
+# long_query_time = 2
+`
+
+    await fs.writeFile(join(configDir, 'php.ini'), phpIni)
+    await fs.writeFile(join(configDir, 'mysql.cnf'), mysqlCnf)
   }
 }

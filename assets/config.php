@@ -47,6 +47,10 @@ if (substr($CFG->wwwroot, -7) === '/public') {
 
 $CFG->directorypermissions = 0777;
 
+// Security settings
+$CFG->preventexecpath = true;  // Prevent privilege escalation via executable path settings in admin GUI
+$CFG->routerconfigured = true; // Router is configured via Apache rewrite rules
+
 // Performance settings
 $CFG->cachejs = true;
 $CFG->cachetemplates = true;

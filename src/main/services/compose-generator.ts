@@ -3,11 +3,6 @@ import { randomBytes } from 'crypto'
 
 export class ComposeGenerator {
   generate(project: Project, version: MoodleVersion): string {
-    const webroot = version.webroot ? `/var/www/html/${version.webroot}` : '/var/www/html'
-    const commandOverride = version.webroot
-      ? `command: /bin/bash -c "sed -i 's|/var/www/html|${webroot}|g' /etc/apache2/sites-available/000-default.conf && docker-php-entrypoint apache2-foreground"`
-      : ''
-
     const password = this.generatePassword()
 
     // Determine docker images based on requirements
@@ -17,12 +12,14 @@ export class ComposeGenerator {
     return `services:
   moodle:
     image: ${moodleImage}
-    ${commandOverride}
+    command: /bin/bash -c "a2enmod rewrite headers && docker-php-entrypoint apache2-foreground"
     ports:
       - "${project.port}:80"
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata
+      - ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini
+      - ./config/apache.conf:/etc/apache2/sites-available/000-default.conf
     environment:
       - MOODLE_DBTYPE=mysqli
       - MOODLE_DBHOST=db
@@ -46,6 +43,7 @@ export class ComposeGenerator {
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata
+      - ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini
     environment:
       - MOODLE_DBTYPE=mysqli
       - MOODLE_DBHOST=db
@@ -55,7 +53,7 @@ export class ComposeGenerator {
       - MOODLE_DOCKER_WWWROOT=/var/www/html
     depends_on:
       moodle:
-        condition: service_healthy
+        condition: service_started
 
 
   db:
@@ -83,6 +81,7 @@ export class ComposeGenerator {
       - MYSQL_PASSWORD=${password}
     volumes:
       - ./mysql_data:/var/lib/mysql
+      - ./config/mysql.cnf:/etc/mysql/conf.d/moodlebox.cnf
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${password}"]
       interval: 5s
@@ -100,6 +99,56 @@ export class ComposeGenerator {
       - PMA_PASSWORD=${password}
     depends_on:
       - db
+`
+  }
+
+  generateApacheConfig(version: MoodleVersion): string {
+    const documentRoot = version.webroot ? `/var/www/html/${version.webroot}` : '/var/www/html'
+    return this.buildApacheConfig(documentRoot, !!(version.router || version.webroot))
+  }
+
+  private buildApacheConfig(documentRoot: string, withRouter: boolean = false): string {
+    const rules = [
+      '(\\/vendor\\/)',
+      '(\\/node_modules\\/)',
+      '(^|/)\\.(?!well-known\\/)',
+      '(composer\\.json)',
+      '(\\.lock)',
+      '(\\/environment.xml)',
+      '(\\/lib\\/classes)',
+      '(\\/install.xml)',
+      '(\\/README)',
+      '(\\/readme)',
+      '(\\/moodle_readme)',
+      '(\\/upgrade\\.txt)',
+      '(phpunit\\.xml\\.dist)',
+      '(\\/tests\\/behat\\/)',
+      '(\\/fixtures\\/)',
+      '(\\/upgrade\\.txt|UPGRADING\\.md|UPGRADING\\-CURRENT\\.md)'
+    ]
+      .map((rule) => `\tRewriteRule "${rule}" - [L,R=404]`)
+      .join('\n')
+
+    return `<VirtualHost *:80>
+\tServerAdmin webmaster@localhost
+\tDocumentRoot ${documentRoot}
+
+\t<Directory ${documentRoot}>
+\t\tOptions Indexes FollowSymLinks
+\t\tAllowOverride None
+\t\tRequire all granted${withRouter ? `
+\t\tFallbackResource /r.php` : ''}
+\t</Directory>
+
+\tRewriteEngine On
+${rules}
+\t# Handling 40x errors - enables missing files to be themed by Moodle
+\tErrorDocument 404 /error/index.php
+\tErrorDocument 403 /error/index.php?code=404
+
+\tErrorLog \${APACHE_LOG_DIR}/error.log
+\tCustomLog \${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
 `
   }
 

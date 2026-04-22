@@ -101,7 +101,7 @@ export class MoodleInstaller {
 
     return this.dockerExec({
       container: 'moodle',
-      command: ['composer', 'install', '--no-interaction', '--prefer-dist'],
+      command: ['composer', 'install', '--no-interaction', '--prefer-dist', '--no-dev', '--classmap-authoritative'],
       cwd: projectPath,
       onStdout: onLog,
       onStderr: onLog
@@ -214,36 +214,40 @@ export class MoodleInstaller {
 
     onLog?.('⏳ Running Moodle installation (this may take 5-10 minutes for FULLTEXT indexes)...')
 
-    return this.dockerExec({
+    await this.dockerExec({
       container: 'moodle',
       command,
       cwd: projectPath,
       onStdout: onLog,
       onStderr: onLog
     })
+
+    // Set sensible defaults to suppress admin notification prompts
+    await this.configureDefaults(projectPath, onLog)
   }
 
   /**
-   * Disable password policy in Moodle config
+   * Set post-install config defaults via Moodle CLI
    */
-  async disablePasswordPolicy(projectPath: string): Promise<void> {
-    const command = [
-      'php',
-      '-r',
-      `define('CLI_SCRIPT', true);
-       require('/var/www/html/config.php'); 
-       $CFG->passwordpolicy = 0; 
-       file_put_contents('/var/www/html/config.php', 
-         str_replace('?>', '', file_get_contents('/var/www/html/config.php')) . 
-         "\\n\\$CFG->passwordpolicy = 0;\\n"
-       );`
+  async configureDefaults(projectPath: string, onLog?: (log: string) => void): Promise<void> {
+    onLog?.('⚙️  Applying default configuration...')
+
+    const settings = [
+      ['noreplyaddress', 'noreply@localhost'],
+      ['passwordpolicy', '0']
     ]
 
-    return this.dockerExec({
-      container: 'moodle',
-      command,
-      cwd: projectPath
-    })
+    for (const [name, value] of settings) {
+      await this.dockerExec({
+        container: 'moodle',
+        command: ['php', 'admin/cli/cfg.php', `--name=${name}`, `--set=${value}`],
+        cwd: projectPath,
+        onStdout: onLog,
+        onStderr: onLog
+      })
+    }
+
+    onLog?.('✓ Default configuration applied')
   }
 
   /**
