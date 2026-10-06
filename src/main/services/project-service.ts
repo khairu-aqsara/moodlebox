@@ -825,7 +825,7 @@ export class ProjectService {
     await fs.writeFile(join(normalizedProjectPath, 'docker-compose.yml'), composeContent)
 
     // Create config directory and default config files
-    await this.createConfigFiles(normalizedProjectPath, version)
+    await this.createConfigFiles(normalizedProjectPath, version, newProject.port)
 
     // Save to store
     const projects = this.getAllProjects()
@@ -1178,11 +1178,15 @@ export class ProjectService {
     })
   }
 
-  private async createConfigFiles(projectPath: string, version: MoodleVersion): Promise<void> {
+  private async createConfigFiles(
+    projectPath: string,
+    version: MoodleVersion,
+    hostPort: number
+  ): Promise<void> {
     const configDir = join(projectPath, 'config')
     await fs.mkdir(configDir, { recursive: true })
 
-    const apacheConf = this.composeGenerator.generateApacheConfig(version)
+    const apacheConf = this.composeGenerator.generateApacheConfig(version, hostPort)
     await fs.writeFile(join(configDir, 'apache.conf'), apacheConf)
 
     const phpIni = `; MoodleBox - PHP configuration
