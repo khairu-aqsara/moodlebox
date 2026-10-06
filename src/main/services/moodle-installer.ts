@@ -14,6 +14,30 @@ export interface DockerExecOptions {
   env?: Record<string, string>
 }
 
+/**
+ * PHP run once after install, as the admin user, to leave the site ready for testing.
+ *
+ * 1. Apply default values to any admin settings that still have none. Settings pages
+ *    that need the site:config capability (for example the email and manual
+ *    authentication lock options) are missing from the admin tree when the CLI installer
+ *    applies defaults, so on Moodle 5.1+ the admin was sent to the "New settings" page
+ *    after every login.
+ * 2. Enable the Moodle app through Moodle's own setting, so web services, the REST
+ *    protocol and the mobile token capability are all switched on, exactly as when an
+ *    admin clicks "Enable web services for mobile devices".
+ * 3. Purge caches so the web server sees the new values straight away.
+ */
+export const FINALISE_SITE_PHP = [
+  "define('CLI_SCRIPT', true);",
+  "require('/var/www/html/config.php');",
+  'require_once($CFG->libdir . "/adminlib.php");',
+  '\\core\\session\\manager::set_user(get_admin());',
+  'admin_apply_default_settings(admin_get_root(true, true), false);',
+  "(new admin_setting_enablemobileservice('enablemobilewebservice', '', '', 0))->write_setting('1');",
+  'purge_all_caches();',
+  'echo "unset settings: " . (int) any_new_admin_settings(admin_get_root(true, true)) . PHP_EOL;'
+].join(' ')
+
 export class MoodleInstaller {
   /**
    * Create initial config.php file from template
@@ -239,10 +263,9 @@ export class MoodleInstaller {
   async configureDefaults(projectPath: string, onLog?: (log: string) => void): Promise<void> {
     onLog?.('⚙️  Applying default configuration...')
 
-    const settings = [
-      ['noreplyaddress', 'noreply@localhost'],
-      ['passwordpolicy', '0']
-    ]
+    // Moodle's password policy stays on (its default). It only applies when a password is
+    // set or changed, so the admin/admin login created during install keeps working.
+    const settings = [['noreplyaddress', 'noreply@localhost']]
 
     for (const [name, value] of settings) {
       await this.dockerExec({
@@ -253,6 +276,15 @@ export class MoodleInstaller {
         onStderr: onLog
       })
     }
+
+    onLog?.('📱 Applying remaining defaults and enabling the Moodle app...')
+    await this.dockerExec({
+      container: 'moodle',
+      command: ['php', '-r', FINALISE_SITE_PHP],
+      cwd: projectPath,
+      onStdout: onLog,
+      onStderr: onLog
+    })
 
     onLog?.('✓ Default configuration applied')
   }
