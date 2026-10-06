@@ -38,8 +38,10 @@ export class ComposeGenerator {
 
   cron:
     image: ${moodleImage}
+    # Moodle times cron from one run's start to the next and warns above 1 minute.
+    # cron.php keeps itself alive for 3 minutes by default, so cap it below a minute.
     command: >
-      /bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"
+      /bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata

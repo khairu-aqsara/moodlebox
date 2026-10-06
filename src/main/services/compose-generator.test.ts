@@ -137,7 +137,7 @@ describe('ComposeGenerator', () => {
 
       expect(output).toContain('cron:')
       expect(output).toContain(
-        '/bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"'
+        '/bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"'
       )
     })
 
