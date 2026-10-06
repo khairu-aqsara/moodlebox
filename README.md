@@ -155,6 +155,18 @@ The icon files are located in `build/`:
 
 ---
 
+## 🎁 What Every New Site Includes
+
+- Admin account: `admin` / `admin`
+- A sample course to explore
+- phpMyAdmin for the database
+- Cron running every minute
+- Web services for the Moodle app enabled
+- Moodle's password policy enabled (it applies to new passwords, so `admin` / `admin` keeps working)
+- A clean System status report: the only Security checks warnings are the ones expected on a local site (HTTPS cookies, writable config.php, backup of user data)
+
+---
+
 ## 🛠️ Development
 
 ### Prerequisites
