@@ -278,13 +278,15 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
 
       {/* Speed Dial FAB */}
       {!dockerError && (
-        <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3">
+        // pointer-events-none on the wrapper: its box spans the (hidden) menu items above the
+        // trigger, and would otherwise swallow clicks on project buttons behind it.
+        <div className="pointer-events-none fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3">
           {/* Menu Items */}
           <div
             className={cn(
               'flex flex-col items-end gap-3 transition-all duration-300 ease-in-out',
               isFabOpen
-                ? 'opacity-100 translate-y-0 scale-100'
+                ? 'pointer-events-auto opacity-100 translate-y-0 scale-100'
                 : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
             )}
           >
@@ -326,7 +328,7 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
           <Button
             size="icon"
             className={cn(
-              'h-14 w-14 rounded-full shadow-lg transition-transform duration-300 [&_svg]:size-6',
+              'pointer-events-auto h-14 w-14 rounded-full shadow-lg transition-transform duration-300 [&_svg]:size-6',
               isFabOpen ? 'rotate-90' : 'rotate-0'
             )}
             onClick={toggleFab}
