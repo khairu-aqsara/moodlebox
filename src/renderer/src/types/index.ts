@@ -12,7 +12,8 @@ export const MoodleVersionSchema = z.object({
   }),
   webroot: z.string().optional(),
   router: z.boolean().optional(),
-  composer: z.boolean().optional()
+  composer: z.boolean().optional(),
+  hidden: z.boolean().optional()
 })
 
 export const VersionsDataSchema = z.object({
