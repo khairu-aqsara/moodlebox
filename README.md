@@ -62,7 +62,7 @@ MoodleBox is currently **unsigned** and may be blocked by macOS Gatekeeper. If y
 
 ```bash
 # Download and run the fix script:
-curl -O https://raw.githubusercontent.com/yourusername/ezadevbox/main/fix-macos-quarantine.sh
+curl -O https://raw.githubusercontent.com/khairu-aqsara/moodlebox/main/fix-macos-quarantine.sh
 chmod +x fix-macos-quarantine.sh
 ./fix-macos-quarantine.sh
 ```
@@ -97,8 +97,8 @@ After opening once, macOS will remember your choice and allow future launches.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ezadevbox.git
-cd ezadevbox
+git clone https://github.com/khairu-aqsara/moodlebox.git
+cd moodlebox
 
 # Install dependencies
 npm install
@@ -159,13 +159,26 @@ The icon files are located in `build/`:
 
 1. **Ensure Docker Desktop is running**
 2. **Launch MoodleBox**
-3. **Click "Add Project"** (+ icon)
-4. **Enter project name** and select Moodle version
-5. **Click "Create Project"** and wait ~3-5 minutes
-6. **Click "Open Moodle"** when status shows "Ready"
-7. **Login** with default credentials:
+3. **Click the round button** in the bottom-right corner, then **New Project** (or **Create Your First Project** if the list is empty)
+4. **Enter a project name** and select a Moodle version
+5. **Click "Create Project"**, then click **Start Project** (▶) on the new project card
+6. **Wait ~3-5 minutes** on first start while Moodle is downloaded and installed
+7. **Click Open Moodle** (↗) when the status shows "Running"
+8. **Login** with default credentials:
    - Username: `admin`
    - Password: `admin`
+
+---
+
+## 🎁 What Every New Site Includes
+
+- Admin account: `admin` / `admin`
+- A sample course to explore
+- phpMyAdmin for the database
+- Cron running every minute
+- Web services for the Moodle app enabled
+- Moodle's password policy enabled (it applies to new passwords, so `admin` / `admin` keeps working)
+- A clean System status report: the only Security checks warnings are the ones expected on a local site (HTTPS cookies, writable config.php, backup of user data)
 
 ---
 
@@ -217,12 +230,16 @@ npm run build:unpack # Unpacked directory (faster for testing)
 
 ### Project States
 
-| State        | Description           | Action   |
-| ------------ | --------------------- | -------- |
-| **Ready**    | Fully operational     | Use it!  |
-| **Starting** | Containers booting up | Wait     |
-| **Stopped**  | Containers halted     | Start it |
-| **Error**    | Something went wrong  | Check it |
+| State            | Description                             | Action   |
+| ---------------- | --------------------------------------- | -------- |
+| **Running**      | Fully operational                       | Use it!  |
+| **Provisioning** | Downloading Moodle (first start only)   | Wait     |
+| **Installing**   | Installing Moodle and the sample course | Wait     |
+| **Starting**     | Containers booting up                   | Wait     |
+| **Waiting**      | Waiting for the database and web server | Wait     |
+| **Stopping**     | Containers shutting down                | Wait     |
+| **Stopped**      | Containers halted                       | Start it |
+| **Error**        | Something went wrong                    | Check it |
 
 ---
 
@@ -247,6 +264,10 @@ npm run build:unpack # Unpacked directory (faster for testing)
 - Check Docker Desktop has sufficient resources (4GB+ RAM)
 - Check internet connection (Moodle downloads are 100-200MB+)
 - View project logs for detailed error messages
+
+### Computer Running Slowly
+
+Each running project uses four containers (Moodle, cron, database and phpMyAdmin). Stop projects you aren't using, especially on machines with 16GB of RAM or less.
 
 ### macOS App Blocked
 

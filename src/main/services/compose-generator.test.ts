@@ -137,7 +137,7 @@ describe('ComposeGenerator', () => {
 
       expect(output).toContain('cron:')
       expect(output).toContain(
-        '/bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"'
+        '/bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"'
       )
     })
 
@@ -255,6 +255,22 @@ describe('ComposeGenerator', () => {
       const config = generator.generateApacheConfig(mockVersion50)
       expect(config).toContain('DocumentRoot /var/www/html')
       expect(config).not.toContain('DocumentRoot /var/www/html/public')
+    })
+    it('should listen on the host port inside the container when given one', () => {
+      const config = generator.generateApacheConfig(mockVersion51, 8082)
+      expect(config.startsWith('Listen 8082\n<VirtualHost *:80 *:8082>')).toBe(true)
+    })
+
+    it('should only use port 80 when no host port is given', () => {
+      const config = generator.generateApacheConfig(mockVersion51)
+      expect(config).not.toContain('Listen')
+      expect(config.startsWith('<VirtualHost *:80>')).toBe(true)
+    })
+
+    it('should not add a second listener when the host port is 80', () => {
+      const config = generator.generateApacheConfig(mockVersion51, 80)
+      expect(config).not.toContain('Listen')
+      expect(config.startsWith('<VirtualHost *:80>')).toBe(true)
     })
   })
 

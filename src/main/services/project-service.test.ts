@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ProjectService } from './project-service'
+import { ProjectService, decideSyncedStatus } from './project-service'
 import { Project } from '../types'
 
 // Mock electron-store
@@ -391,5 +391,53 @@ describe('ProjectService - Security Validations', () => {
       expect(expectedProject2PhpMyAdmin).toBe(9002)
       expect(expectedProject1PhpMyAdmin).not.toBe(expectedProject2PhpMyAdmin)
     })
+  })
+})
+
+describe('decideSyncedStatus', () => {
+  const containers = (
+    overrides: Partial<{ running: boolean; healthy: boolean; unhealthy: boolean }>
+  ): { running: boolean; healthy: boolean; unhealthy: boolean; containerCount: number } => ({
+    running: true,
+    healthy: true,
+    unhealthy: false,
+    containerCount: 4,
+    ...overrides
+  })
+
+  it('marks a stopped project with healthy containers as ready', () => {
+    expect(decideSyncedStatus('stopped', containers({}))).toBe('ready')
+  })
+
+  it('recovers a project left in starting once its containers are healthy', () => {
+    expect(decideSyncedStatus('starting', containers({}))).toBe('ready')
+  })
+
+  it('keeps a ready project ready while a health check is still pending', () => {
+    expect(decideSyncedStatus('ready', containers({ healthy: false }))).toBeNull()
+  })
+
+  it('moves a ready project to starting when a health check has failed', () => {
+    expect(decideSyncedStatus('ready', containers({ healthy: false, unhealthy: true }))).toBe(
+      'starting'
+    )
+  })
+
+  it('marks a stopped project with running but not yet healthy containers as starting', () => {
+    expect(decideSyncedStatus('stopped', containers({ healthy: false }))).toBe('starting')
+  })
+
+  it('marks a project as stopped when no containers are running', () => {
+    expect(decideSyncedStatus('starting', containers({ running: false, healthy: false }))).toBe(
+      'stopped'
+    )
+    expect(decideSyncedStatus('ready', containers({ running: false, healthy: false }))).toBe(
+      'stopped'
+    )
+  })
+
+  it('leaves stopped and error projects alone when nothing is running', () => {
+    expect(decideSyncedStatus('stopped', containers({ running: false, healthy: false }))).toBeNull()
+    expect(decideSyncedStatus('error', containers({ running: false, healthy: false }))).toBeNull()
   })
 })

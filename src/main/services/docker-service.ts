@@ -4,6 +4,45 @@ import { basename } from 'path'
 import log from 'electron-log'
 import { DOCKER } from '../constants'
 
+export interface ContainerState {
+  Service?: string
+  State?: string
+  Health?: string
+}
+
+export interface ContainerStatusSummary {
+  running: boolean
+  healthy: boolean
+  unhealthy: boolean
+  containerCount: number
+}
+
+/**
+ * Summarise `docker compose ps` container states for a project.
+ *
+ * - `healthy` needs the moodle container to be present and passing its health check,
+ *   and every other container to be healthy (or running, if it has no health check).
+ *   Without the moodle check, a project whose db and phpMyAdmin started first
+ *   could be reported as ready before Moodle itself was up.
+ * - `unhealthy` is true only when Docker reports a failed health check. A container
+ *   whose first health check hasn't run yet reports "starting", which is not a failure.
+ */
+export function summariseContainerStates(containers: ContainerState[]): ContainerStatusSummary {
+  const runningCount = containers.filter((c) => c.State === 'running').length
+  const allHealthy = containers.every((c) =>
+    c.Health ? c.Health === 'healthy' : c.State === 'running'
+  )
+  const moodle = containers.find((c) => c.Service === 'moodle')
+  const moodleHealthy = !!moodle && moodle.State === 'running' && moodle.Health === 'healthy'
+
+  return {
+    running: runningCount > 0,
+    healthy: runningCount > 0 && allHealthy && moodleHealthy,
+    unhealthy: containers.some((c) => c.Health === 'unhealthy'),
+    containerCount: containers.length
+  }
+}
+
 export interface DockerCommand {
   cwd: string
   onStdout?: (data: string) => void
@@ -117,7 +156,8 @@ export class DockerService {
    * @param projectPath - Path to the project directory (contains docker-compose.yml)
    * @returns Object with:
    *   - `running`: true if at least one container is running
-   *   - `healthy`: true if all containers are healthy (or have no health check)
+   *   - `healthy`: true if the moodle container is healthy and all others are healthy (or running, with no health check)
+   *   - `unhealthy`: true if any container has failed its health check
    *   - `containerCount`: number of containers found
    *
    * @example
@@ -128,11 +168,7 @@ export class DockerService {
    * }
    * ```
    */
-  async getProjectContainerStatus(projectPath: string): Promise<{
-    running: boolean
-    healthy: boolean
-    containerCount: number
-  }> {
+  async getProjectContainerStatus(projectPath: string): Promise<ContainerStatusSummary> {
     return new Promise((resolve) => {
       const proc = spawn('docker', ['compose', 'ps', '--format', 'json'], {
         cwd: projectPath,
@@ -156,7 +192,7 @@ export class DockerService {
           log.debug(
             `docker compose ps failed with code ${code} in ${projectPath}, stderr: ${stderr}`
           )
-          resolve({ running: false, healthy: false, containerCount: 0 })
+          resolve({ running: false, healthy: false, unhealthy: false, containerCount: 0 })
           return
         }
 
@@ -164,7 +200,7 @@ export class DockerService {
         const trimmedOutput = output.trim()
         if (!trimmedOutput) {
           log.debug(`docker compose ps returned empty output for ${projectPath}`)
-          resolve({ running: false, healthy: false, containerCount: 0 })
+          resolve({ running: false, healthy: false, unhealthy: false, containerCount: 0 })
           return
         }
 
@@ -172,15 +208,11 @@ export class DockerService {
           // docker compose ps --format json returns one JSON object per line
           // Parse each line as a separate JSON object
           const lines = trimmedOutput.split('\n').filter((line) => line.trim())
-          interface ContainerInfo {
-            State?: string
-            Health?: string
-          }
-          const containers: ContainerInfo[] = []
+          const containers: ContainerState[] = []
 
           for (const line of lines) {
             try {
-              const container = JSON.parse(line.trim()) as ContainerInfo
+              const container = JSON.parse(line.trim()) as ContainerState
               containers.push(container)
             } catch (parseError) {
               log.debug(`Failed to parse container line: ${line}`, parseError)
@@ -189,37 +221,27 @@ export class DockerService {
 
           if (containers.length === 0) {
             log.debug(`No containers parsed from output: ${trimmedOutput}`)
-            resolve({ running: false, healthy: false, containerCount: 0 })
+            resolve({ running: false, healthy: false, unhealthy: false, containerCount: 0 })
             return
           }
 
-          const runningContainers = containers.filter((c: ContainerInfo) => c.State === 'running')
-          const allHealthy = containers.every((c: ContainerInfo) => {
-            if (c.Health) {
-              return c.Health === 'healthy'
-            }
-            return c.State === 'running'
-          })
+          const summary = summariseContainerStates(containers)
 
           log.debug(
-            `Container status for ${projectPath}: ${runningContainers.length}/${containers.length} running, healthy: ${allHealthy}`
+            `Container status for ${projectPath}: ${containers.filter((c) => c.State === 'running').length}/${containers.length} running, healthy: ${summary.healthy}, unhealthy: ${summary.unhealthy}`
           )
 
-          resolve({
-            running: runningContainers.length > 0,
-            healthy: allHealthy && runningContainers.length > 0,
-            containerCount: containers.length
-          })
+          resolve(summary)
         } catch (error) {
           log.error(`Error parsing docker compose ps output for ${projectPath}:`, error)
           log.debug(`Output was: ${output}`)
-          resolve({ running: false, healthy: false, containerCount: 0 })
+          resolve({ running: false, healthy: false, unhealthy: false, containerCount: 0 })
         }
       })
 
       proc.on('error', (err) => {
         log.error(`Error running docker compose ps for ${projectPath}:`, err)
-        resolve({ running: false, healthy: false, containerCount: 0 })
+        resolve({ running: false, healthy: false, unhealthy: false, containerCount: 0 })
       })
     })
   }

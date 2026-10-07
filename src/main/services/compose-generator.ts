@@ -38,8 +38,10 @@ export class ComposeGenerator {
 
   cron:
     image: ${moodleImage}
+    # Moodle times cron from one run's start to the next and warns above 1 minute.
+    # cron.php keeps itself alive for 3 minutes by default, so cap it below a minute.
     command: >
-      /bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"
+      /bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata
@@ -102,12 +104,23 @@ export class ComposeGenerator {
 `
   }
 
-  generateApacheConfig(version: MoodleVersion): string {
+  /**
+   * @param hostPort - The project's published web port (the port in $CFG->wwwroot).
+   *   Apache also listens on it inside the container so that Moodle can reach its own
+   *   wwwroot (http://localhost:<port>) from the server side. Moodle's router and
+   *   public paths checks, and anything else that requests the site's own URL, fail
+   *   with "Couldn't connect to server" without it.
+   */
+  generateApacheConfig(version: MoodleVersion, hostPort?: number): string {
     const documentRoot = version.webroot ? `/var/www/html/${version.webroot}` : '/var/www/html'
-    return this.buildApacheConfig(documentRoot, !!(version.router || version.webroot))
+    return this.buildApacheConfig(documentRoot, !!(version.router || version.webroot), hostPort)
   }
 
-  private buildApacheConfig(documentRoot: string, withRouter: boolean = false): string {
+  private buildApacheConfig(
+    documentRoot: string,
+    withRouter: boolean = false,
+    hostPort?: number
+  ): string {
     const rules = [
       '(\\/vendor\\/)',
       '(\\/node_modules\\/)',
@@ -129,7 +142,11 @@ export class ComposeGenerator {
       .map((rule) => `\tRewriteRule "${rule}" - [L,R=404]`)
       .join('\n')
 
-    return `<VirtualHost *:80>
+    const extraPort = hostPort && hostPort !== 80 ? hostPort : undefined
+    const listen = extraPort ? `Listen ${extraPort}\n` : ''
+    const vhostPorts = extraPort ? `*:80 *:${extraPort}` : '*:80'
+
+    return `${listen}<VirtualHost ${vhostPorts}>
 \tServerAdmin webmaster@localhost
 \tDocumentRoot ${documentRoot}
 

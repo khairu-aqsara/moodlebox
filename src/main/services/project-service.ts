@@ -1,7 +1,7 @@
 import { Project, VersionsData, ProgressInfo, MoodleVersion } from '../types'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
-import { DockerService } from './docker-service'
+import { DockerService, ContainerStatusSummary } from './docker-service'
 import { ComposeGenerator } from './compose-generator'
 import { BrowserWindow } from 'electron'
 import Store from 'electron-store'
@@ -20,6 +20,31 @@ type TypedStore = Store<ProjectStoreSchema> & {
   set<K extends keyof ProjectStoreSchema>(key: K, value: ProjectStoreSchema[K]): void
 }
 
+/**
+ * Decide what a background sync should change a project's status to, given its
+ * containers. Returns null when the status should be left alone.
+ *
+ * A project already marked ready stays ready while a container's first health check
+ * is still pending ("starting"); only a failed health check moves it back. Without
+ * this, a sync that ran a few seconds after the containers started (for example when
+ * the window regained focus after "Open browser") flipped a working site to starting.
+ */
+export function decideSyncedStatus(
+  current: Project['status'],
+  containers: ContainerStatusSummary
+): Project['status'] | null {
+  if (containers.running && containers.healthy) {
+    return current === 'ready' ? null : 'ready'
+  }
+  if (containers.running) {
+    if (current === 'ready' && !containers.unhealthy) return null
+    if (current === 'starting' || current === 'waiting') return null
+    return 'starting'
+  }
+  if (current === 'stopped' || current === 'error') return null
+  return 'stopped'
+}
+
 export class ProjectService {
   private store: TypedStore
   private composeGenerator: ComposeGenerator
@@ -28,6 +53,14 @@ export class ProjectService {
   private syncDebounceTimer: NodeJS.Timeout | null = null
   private lastDockerStatus: boolean | null = null
   private lastSyncTime: number = 0
+
+  /**
+   * Projects with a start/stop/delete call currently running in this process.
+   * Sync never touches these. A project left in "starting" or "waiting" with no
+   * operation in flight (set by a previous sync, or left over from a crash) is
+   * re-checked against Docker instead of being skipped forever.
+   */
+  private readonly operationsInFlight = new Set<string>()
   private readonly SYNC_DEBOUNCE_MS = PROJECT_SYNC.DEBOUNCE_MS
   private readonly SYNC_COOLDOWN_MS = PROJECT_SYNC.COOLDOWN_MS
 
@@ -43,6 +76,12 @@ export class ProjectService {
     'stopping', // Stopping containers
     'deleting' // Deleting project
   ]
+
+  private isSyncProtected(project: Project): boolean {
+    if (this.operationsInFlight.has(project.id)) return true
+    if (project.status === 'starting' || project.status === 'waiting') return false
+    return this.ACTIVE_OPERATION_STATUSES.includes(project.status)
+  }
 
   constructor() {
     const rawStore = new Store<ProjectStoreSchema>({
@@ -273,7 +312,7 @@ export class ProjectService {
         // This must be checked BEFORE any file system operations to prevent interference
         // These operations should not be interrupted by sync, as they represent running processes
         // (downloads, installations, container operations, etc.)
-        if (this.ACTIVE_OPERATION_STATUSES.includes(project.status)) {
+        if (this.isSyncProtected(project)) {
           log.debug(
             `Skipping sync for project ${project.name} - status is ${project.status} (active operation)`
           )
@@ -397,50 +436,43 @@ export class ProjectService {
           `Container status for ${project.name}: running=${containerStatus.running}, healthy=${containerStatus.healthy}, count=${containerStatus.containerCount}`
         )
 
-        if (containerStatus.running && containerStatus.healthy) {
-          // Containers are running and healthy - user likely closed app without stopping
-          if (project.status !== 'ready') {
-            log.info(`Project ${project.name} has running containers - updating status to ready`)
-            this.updateProject(project.id, {
-              status: 'ready',
-              statusDetail: `Ready at http://localhost:${project.port}`,
-              errorMessage: undefined,
-              progress: undefined
-            })
-          } else {
-            log.debug(`Project ${project.name} already marked as ready, no update needed`)
-          }
-        } else if (containerStatus.running && !containerStatus.healthy) {
-          // Containers running but not healthy - mark as starting
-          if (project.status !== 'starting' && project.status !== 'waiting') {
-            log.info(`Project ${project.name} containers running but not healthy - updating status`)
-            this.updateProject(project.id, {
-              status: 'starting',
-              statusDetail: 'Containers starting...',
-              errorMessage: undefined,
-              progress: undefined
-            })
-          }
+        // Re-read the project: a start/stop may have begun while Docker was being queried,
+        // and this sync must not overwrite the status that operation has set since.
+        const latest = this.getProject(project.id)
+        if (!latest || this.isSyncProtected(latest)) {
+          log.debug(`Project ${project.name} changed during sync - leaving status as is`)
+          return
+        }
+
+        const nextStatus = decideSyncedStatus(latest.status, containerStatus)
+        if (nextStatus === null) {
+          log.debug(`Project ${project.name} status ${latest.status} unchanged`)
+        } else if (nextStatus === 'ready') {
+          log.info(`Project ${project.name} has healthy containers - updating status to ready`)
+          this.updateProject(project.id, {
+            status: 'ready',
+            statusDetail: `Ready at http://localhost:${latest.port}`,
+            errorMessage: undefined,
+            progress: undefined
+          })
+        } else if (nextStatus === 'starting') {
+          log.info(`Project ${project.name} containers running but not healthy - updating status`)
+          this.updateProject(project.id, {
+            status: 'starting',
+            statusDetail: 'Containers starting...',
+            errorMessage: undefined,
+            progress: undefined
+          })
         } else {
-          // No containers running - mark as stopped
-          // But skip if project is in an active operation status (shouldn't happen due to early return, but be safe)
-          if (
-            project.status !== 'stopped' &&
-            project.status !== 'error' &&
-            !this.ACTIVE_OPERATION_STATUSES.includes(project.status)
-          ) {
-            log.info(
-              `Project ${project.name} has no running containers (running=${containerStatus.running}, count=${containerStatus.containerCount}) - updating status to stopped`
-            )
-            this.updateProject(project.id, {
-              status: 'stopped',
-              statusDetail: undefined,
-              errorMessage: undefined,
-              progress: undefined
-            })
-          } else {
-            log.debug(`Project ${project.name} already marked as stopped, no update needed`)
-          }
+          log.info(
+            `Project ${project.name} has no running containers (count=${containerStatus.containerCount}) - updating status to stopped`
+          )
+          this.updateProject(project.id, {
+            status: 'stopped',
+            statusDetail: undefined,
+            errorMessage: undefined,
+            progress: undefined
+          })
         }
       } catch (error) {
         log.error(`Error syncing project ${project.id}:`, error)
@@ -793,7 +825,7 @@ export class ProjectService {
     await fs.writeFile(join(normalizedProjectPath, 'docker-compose.yml'), composeContent)
 
     // Create config directory and default config files
-    await this.createConfigFiles(normalizedProjectPath, version)
+    await this.createConfigFiles(normalizedProjectPath, version, newProject.port)
 
     // Save to store
     const projects = this.getAllProjects()
@@ -992,82 +1024,90 @@ export class ProjectService {
   async startProject(id: string, onLog?: (log: string) => void): Promise<void> {
     const project = this.getProject(id)
     if (!project) throw new Error('Project not found')
-
-    // Get version data — support both "5.2" (new) and "5.2.0" (legacy) stored formats
-    const version = this.versionsData?.releases.find(
-      (r) =>
-        r.version === project.moodleVersion || project.moodleVersion.startsWith(r.version + '.')
-    )
-    if (!version) {
-      throw new Error(`Version ${project.moodleVersion} not found`)
-    }
-
-    // Check Docker daemon
-    const dockerAvailable = await this.dockerService.checkDockerInstalled()
-    if (!dockerAvailable) {
-      const errorMsg =
-        'Docker is not installed or not running.\n\n' +
-        'Please:\n' +
-        '1. Install Docker Desktop from https://docker.com\n' +
-        '2. Start Docker Desktop\n' +
-        '3. Wait for Docker to be ready (check the Docker icon)\n' +
-        '4. Try starting the project again'
-      this.updateProject(id, {
-        status: 'error',
-        errorMessage: errorMsg,
-        lastUsed: new Date().toISOString()
-      })
-      onLog?.(`❌ ${errorMsg}`)
-      return
-    }
-
+    this.operationsInFlight.add(id)
     try {
-      // Update status callback
-      const onStatusUpdate = (
-        status: Project['status'],
-        errorMessage?: string,
-        statusDetail?: string,
-        progress?: ProgressInfo
-      ): void => {
-        const updates: Partial<Project> = { status, lastUsed: new Date().toISOString() }
-
-        if (status === 'error' && errorMessage) {
-          updates.errorMessage = errorMessage
-          updates.statusDetail = undefined
-          updates.progress = undefined
-        } else if (status !== 'error') {
-          updates.errorMessage = undefined
-          updates.statusDetail = statusDetail
-          updates.progress = progress
-        }
-
-        this.updateProject(id, updates)
+      // Get version data — support both "5.2" (new) and "5.2.0" (legacy) stored formats
+      const version = this.versionsData?.releases.find(
+        (r) =>
+          r.version === project.moodleVersion || project.moodleVersion.startsWith(r.version + '.')
+      )
+      if (!version) {
+        throw new Error(`Version ${project.moodleVersion} not found`)
       }
 
-      // Use lifecycle manager for complete workflow
-      const { LifecycleManager } = await import('./lifecycle-manager')
-      const lifecycleManager = new LifecycleManager()
+      // Check Docker daemon
+      const dockerAvailable = await this.dockerService.checkDockerInstalled()
+      if (!dockerAvailable) {
+        const errorMsg =
+          'Docker is not installed or not running.\n\n' +
+          'Please:\n' +
+          '1. Install Docker Desktop from https://docker.com\n' +
+          '2. Start Docker Desktop\n' +
+          '3. Wait for Docker to be ready (check the Docker icon)\n' +
+          '4. Try starting the project again'
+        this.updateProject(id, {
+          status: 'error',
+          errorMessage: errorMsg,
+          lastUsed: new Date().toISOString()
+        })
+        onLog?.(`❌ ${errorMsg}`)
+        return
+      }
 
-      await lifecycleManager.startProject(project, version, onStatusUpdate, onLog)
-    } catch (err: unknown) {
-      // Error already handled by lifecycle manager, but ensure state is updated
-      const errorMessage = err instanceof Error ? err.message : String(err)
-      onLog?.(`❌ Failed to start project: ${errorMessage}`)
+      try {
+        // Update status callback
+        const onStatusUpdate = (
+          status: Project['status'],
+          errorMessage?: string,
+          statusDetail?: string,
+          progress?: ProgressInfo
+        ): void => {
+          const updates: Partial<Project> = { status, lastUsed: new Date().toISOString() }
+
+          if (status === 'error' && errorMessage) {
+            updates.errorMessage = errorMessage
+            updates.statusDetail = undefined
+            updates.progress = undefined
+          } else if (status !== 'error') {
+            updates.errorMessage = undefined
+            updates.statusDetail = statusDetail
+            updates.progress = progress
+          }
+
+          this.updateProject(id, updates)
+        }
+
+        // Use lifecycle manager for complete workflow
+        const { LifecycleManager } = await import('./lifecycle-manager')
+        const lifecycleManager = new LifecycleManager()
+
+        await lifecycleManager.startProject(project, version, onStatusUpdate, onLog)
+      } catch (err: unknown) {
+        // Error already handled by lifecycle manager, but ensure state is updated
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        onLog?.(`❌ Failed to start project: ${errorMessage}`)
+      }
+    } finally {
+      this.operationsInFlight.delete(id)
     }
   }
 
   async stopProject(id: string): Promise<void> {
     const project = this.getProject(id)
     if (!project) throw new Error('Project not found')
+    this.operationsInFlight.add(id)
+    try {
+      // Set status to stopping
+      this.updateProject(id, { status: 'stopping' })
 
-    // Set status to stopping
-    this.updateProject(id, { status: 'stopping' })
+      const { LifecycleManager } = await import('./lifecycle-manager')
+      const lifecycleManager = new LifecycleManager()
 
-    const { LifecycleManager } = await import('./lifecycle-manager')
-    const lifecycleManager = new LifecycleManager()
-
-    await lifecycleManager.stopProject(project)
-    this.updateProject(id, { status: 'stopped' })
+      await lifecycleManager.stopProject(project)
+      this.updateProject(id, { status: 'stopped' })
+    } finally {
+      this.operationsInFlight.delete(id)
+    }
   }
 
   async checkDocker(): Promise<boolean> {
@@ -1138,11 +1178,15 @@ export class ProjectService {
     })
   }
 
-  private async createConfigFiles(projectPath: string, version: MoodleVersion): Promise<void> {
+  private async createConfigFiles(
+    projectPath: string,
+    version: MoodleVersion,
+    hostPort: number
+  ): Promise<void> {
     const configDir = join(projectPath, 'config')
     await fs.mkdir(configDir, { recursive: true })
 
-    const apacheConf = this.composeGenerator.generateApacheConfig(version)
+    const apacheConf = this.composeGenerator.generateApacheConfig(version, hostPort)
     await fs.writeFile(join(configDir, 'apache.conf'), apacheConf)
 
     const phpIni = `; MoodleBox - PHP configuration
