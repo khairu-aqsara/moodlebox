@@ -44,6 +44,7 @@ export interface MoodleVersion {
   webroot?: string // e.g., "public" for Moodle 5.1+
   router?: boolean // Whether Moodle's router (r.php) is available — true for 4.5+
   composer?: boolean // Whether Composer is required for this version
+  hidden?: boolean // Hidden from the New project list; existing projects on this version still start
 }
 
 export interface VersionsData {

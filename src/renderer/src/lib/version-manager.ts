@@ -21,6 +21,11 @@ class VersionManager {
     return this.data.releases
   }
 
+  /** Versions offered when creating a new project (excludes hidden ones) */
+  getSelectableVersions(): VersionsData['releases'] {
+    return this.data.releases.filter((r) => !r.hidden)
+  }
+
   getVersionByNumber(version: string): VersionsData['releases'][0] | undefined {
     return this.data.releases.find((r) => r.version === version)
   }

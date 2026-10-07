@@ -29,6 +29,21 @@
 
 ---
 
+## 🧩 Supported Moodle Versions
+
+| Version | Notes |
+| ------- | ----- |
+| **5.3** | LTS   |
+| **5.2** |       |
+| **5.1** |       |
+| **4.5** | LTS   |
+
+MoodleBox installs the latest patch release of the version you choose (for example 5.2.4) when the project is first started. Existing projects are not upgraded automatically.
+
+Versions that are no longer supported by Moodle (such as 5.0) can't be selected for new projects, but existing projects on those versions still start.
+
+---
+
 ## 🚀 Installation & Usage
 
 ### Option 1: Download Pre-built Release (Recommended)

@@ -120,7 +120,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
   const existingProjects = useProjectStore((state) => state.projects)
   const usedPorts = new Set(existingProjects.flatMap((p) => [p.port, p.phpMyAdminPort]))
 
-  const versions = versionManager.getAllVersions()
+  const versions = versionManager.getSelectableVersions()
   const selectedVersionData = selectedVersion
     ? versionManager.getVersionByNumber(selectedVersion)
     : null

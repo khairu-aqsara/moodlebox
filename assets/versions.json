@@ -1,6 +1,18 @@
 {
-  "latest_update": "2026-04-22",
+  "latest_update": "2026-10-05",
   "releases": [
+    {
+      "version": "5.3",
+      "changelog": "https://moodledev.io/general/releases/5.3",
+      "type": "lts",
+      "requirements": {
+        "php": "8.3",
+        "mysql": "8.4",
+        "postgres": "17"
+      },
+      "webroot": "public",
+      "composer": true
+    },
     {
       "version": "5.2",
       "changelog": "https://moodledev.io/general/releases/5.2",
@@ -35,7 +47,8 @@
         "postgres": "16"
       },
       "router": true,
-      "composer": false
+      "composer": false,
+      "hidden": true
     },
     {
       "version": "4.5",
