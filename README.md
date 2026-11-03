@@ -1,5 +1,8 @@
 # MoodleDocks
 
+> [!NOTE]
+> **MoodleBox is now MoodleDocks.** A big thank you to Thom Rawson ([@tallthom](https://github.com/tallthom)) for the new name: "Docks" is short for Docker. The new name also keeps this app apart from [MoodleBox](https://moodlebox.net), the Moodle server for Raspberry Pi. Your existing projects and settings carry over, because the app keeps its data folders under the old name.
+
 <div align="center">
 
 ![MoodleDocks Logo](image.png)
