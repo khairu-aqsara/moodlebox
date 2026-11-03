@@ -11,8 +11,16 @@ describe('assets/versions.json', () => {
     expect(latest.type).toBe('lts')
     expect(latest.webroot).toBe('public')
     expect(latest.composer).toBe(true)
-    expect(latest.requirements.php).toBe('8.3')
+    expect(latest.requirements.php).toBe('8.4')
     expect(latest.requirements.mysql).toBe('8.4')
+  })
+
+  it('uses the newest PHP each supported Moodle version supports', () => {
+    // From the moodledev.io release notes; 4.5 also blocks 8.4 in environment.xml
+    const php = Object.fromEntries(
+      data.releases.filter((r) => !r.hidden).map((r) => [r.version, r.requirements.php])
+    )
+    expect(php).toEqual({ '5.3': '8.4', '5.2': '8.4', '5.1': '8.4', '4.5': '8.3' })
   })
 
   it('keeps hidden versions in the list so existing projects can still start', () => {
