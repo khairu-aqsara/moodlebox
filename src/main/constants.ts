@@ -10,6 +10,10 @@ export const DOCKER = {
   COMPOSE_COMMAND_TIMEOUT_MS: 300000 // 5 minutes timeout for compose commands
 }
 
+// File in moodledata that the app writes once Moodle is installed and set up.
+// The cron container waits for it, so cron.php does not run during the installation.
+export const CRON_READY_MARKER = '.moodledocks-ready'
+
 // Download-related constants
 export const DOWNLOAD = {
   BUFFER_SIZE: 1024 * 1024, // 1MB buffer for Windows optimization

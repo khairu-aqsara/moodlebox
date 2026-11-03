@@ -137,7 +137,7 @@ describe('ComposeGenerator', () => {
 
       expect(output).toContain('cron:')
       expect(output).toContain(
-        '/bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"'
+        '/bin/bash -c "until [ -f /var/www/moodledata/.moodledocks-ready ]; do sleep 5; done; while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"'
       )
     })
 
@@ -147,8 +147,8 @@ describe('ComposeGenerator', () => {
       expect(output).toContain('- ./moodlecode:/var/www/html')
       expect(output).toContain('- ./moodledata:/var/www/moodledata')
       expect(output).toContain('- ./mysql_data:/var/lib/mysql')
-      expect(output).toContain('- ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini')
-      expect(output).toContain('- ./config/mysql.cnf:/etc/mysql/conf.d/moodlebox.cnf')
+      expect(output).toContain('- ./config/php.ini:/usr/local/etc/php/conf.d/moodledocks.ini')
+      expect(output).toContain('- ./config/mysql.cnf:/etc/mysql/conf.d/moodledocks.cnf')
       expect(output).toContain(
         '- ./config/apache.conf:/etc/apache2/sites-available/000-default.conf'
       )

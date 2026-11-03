@@ -132,11 +132,11 @@ jobs:
             ## 🚀 Installation
 
             ### macOS Users
-            **⚠️ Important:** This app is unsigned. If you see "MoodleBox is damaged" error:
+            **⚠️ Important:** This app is unsigned. If you see "MoodleDocks is damaged" error:
 
             ```bash
             # Remove quarantine attribute from downloaded DMG:
-            xattr -cr ~/Downloads/moodlebox-*.dmg
+            xattr -cr ~/Downloads/moodledocks-*.dmg
             ```
 
             Or use our fix script:
@@ -150,7 +150,7 @@ jobs:
             Run the installer. Windows Defender may show a warning - click "More info" → "Run anyway"
 
             ### Linux Users
-            Make AppImage executable: `chmod +x moodlebox-*.AppImage`
+            Make AppImage executable: `chmod +x moodledocks-*.AppImage`
             Or install .deb/.rpm package
 
             ## 📝 What's Changed

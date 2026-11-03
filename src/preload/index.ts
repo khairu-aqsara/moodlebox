@@ -77,6 +77,7 @@ const api = {
   },
   app: {
     getLogPath: () => ipcRenderer.invoke('app:getLogPath'),
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openLogFolder: () => ipcRenderer.invoke('app:openLogFolder')
   },
   settings: {

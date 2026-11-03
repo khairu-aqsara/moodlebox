@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate MoodleBox icon with orange gradient and black MB text
+Generate MoodleDocks icon with orange gradient and black MB text
 Requires: pip install Pillow
 """
 
@@ -60,6 +60,5 @@ output_path = "build/icon-source.png"
 image.save(output_path, "PNG")
 print(f"✅ Icon saved to {output_path}")
 print("\nNext steps:")
-print("1. Install electron-icon-builder: npm install -g electron-icon-builder")
-print("2. Generate icons: electron-icon-builder --input=build/icon-source.png --output=build")
-print("3. This will create icon.icns (macOS), icon.ico (Windows), and icon.png (Linux)")
+print("Generate the platform icons: npm run icons:build")
+print("This creates icon.icns (macOS), icon.ico (Windows), and icon.png (Linux)")

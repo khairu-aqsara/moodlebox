@@ -5,7 +5,9 @@ import { DockerService } from './docker-service'
 import fetch from 'node-fetch'
 import log from 'electron-log'
 import { getAssetPath } from '../utils/asset-path'
-import { HTTP_WAIT } from '../constants'
+import { HTTP_WAIT, CRON_READY_MARKER } from '../constants'
+import { promises as fs } from 'fs'
+import { join } from 'path'
 
 /**
  * Query GitHub tags API and return the latest stable tag for a given major.minor version.
@@ -30,7 +32,7 @@ export async function resolveLatestTag(majorMinor: string): Promise<string> {
         `https://api.github.com/repos/moodle/moodle/tags?per_page=100&page=${page}`,
         {
           signal: controller.signal,
-          headers: { 'User-Agent': 'MoodleBox/1.0' }
+          headers: { 'User-Agent': 'MoodleDocks/1.0' }
         } as Parameters<typeof fetch>[1]
       )
 
@@ -293,6 +295,9 @@ export class LifecycleManager {
       onLog?.('✓ Moodle already installed, skipping installation')
     }
 
+    // 6. Let the cron container start running scheduled tasks
+    await fs.writeFile(join(project.path, 'moodledata', CRON_READY_MARKER), '')
+
     // 7. Ready - Wait for HTTP
     onStatusUpdate('starting', undefined, 'Waiting for Moodle web server...')
     onLog?.('⏳ Waiting for Moodle web server...')
@@ -342,7 +347,7 @@ export class LifecycleManager {
           const response = await fetch(url, {
             signal: controller.signal,
             headers: {
-              'User-Agent': 'MoodleBox/1.0'
+              'User-Agent': 'MoodleDocks/1.0'
             }
           } as RequestInit)
 

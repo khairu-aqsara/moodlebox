@@ -60,7 +60,7 @@ function configureLogLocation(): void {
 
 // Log app startup (before workspace folder is configured)
 log.info('='.repeat(60))
-log.info(`MoodleBox starting - Version ${app.getVersion()}`)
+log.info(`MoodleDocks starting - Version ${app.getVersion()}`)
 log.info(`Platform: ${process.platform}, Packaged: ${app.isPackaged}`)
 
 // Fix PATH for macOS packaged apps
@@ -76,6 +76,10 @@ if (process.platform === 'darwin' && app.isPackaged) {
     process.env.PATH
   ].join(':')
 }
+
+// Keep the data folder from before the MoodleDocks rename, so saved projects and settings stay.
+// The services below create their electron-store files in userData when they are constructed.
+app.setPath('userData', join(app.getPath('appData'), app.isPackaged ? 'MoodleBox' : 'moodlebox'))
 
 // Initialize services
 const projectService = new ProjectService()
@@ -105,7 +109,7 @@ function createWindow(): BrowserWindow {
     minHeight: WINDOW.MIN_HEIGHT,
     show: false,
     resizable: true,
-    title: 'MoodleBox',
+    title: 'MoodleDocks',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -219,6 +223,8 @@ function setupIPCHandlers(): void {
     return log.transports.file.getFile().path
   })
 
+  ipcMain.handle('app:getVersion', () => app.getVersion())
+
   // Open log file location in file manager
   ipcMain.handle('app:openLogFolder', () => {
     const logPath = log.transports.file.getFile().path
@@ -257,15 +263,15 @@ function setupIPCHandlers(): void {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  log.info('MoodleBox starting...')
+  log.info('MoodleDocks starting...')
 
   try {
     // Set app name for macOS menu bar
-    app.name = 'MoodleBox'
+    app.name = 'MoodleDocks'
 
     // Set app user model id for windows
     if (process.platform === 'win32') {
-      app.setAppUserModelId('com.moodlebox')
+      app.setAppUserModelId('com.moodledocks')
     }
 
     // Configure log location to use workspace folder (must be done early)
@@ -337,8 +343,8 @@ app.whenReady().then(async () => {
     log.error('Critical error during app initialization:', error)
     // Show error dialog to user
     dialog.showErrorBox(
-      'MoodleBox Initialization Error',
-      `Failed to start MoodleBox:\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck logs at: ${log.transports.file.getFile().path}`
+      'MoodleDocks Initialization Error',
+      `Failed to start MoodleDocks:\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck logs at: ${log.transports.file.getFile().path}`
     )
     app.quit()
   }

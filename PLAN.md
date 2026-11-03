@@ -1,6 +1,6 @@
-# MoodleBox Security & Architecture Improvement Plan
+# MoodleDocks Security & Architecture Improvement Plan
 
-This document tracks planned improvements for the MoodleBox application, organized by priority.
+This document tracks planned improvements for the MoodleDocks application, organized by priority.
 
 ## Deferred Tasks
 
@@ -55,10 +55,10 @@ environment:
 
 ```yaml
 # Before:
-test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${password}"]
+test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-p${password}']
 
 # After:
-test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${password}"]
+test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '--password=${password}']
 ```
 
 **Reason:** Short `-p` option doesn't work consistently on Windows. Long `--password=` option works on all platforms.
@@ -205,40 +205,9 @@ const ProjectCreateSchema = {
 
 ### Dev-Only Dependency Vulnerabilities
 
-**Status:** Not Applicable - DevDependencies only
-**Priority:** Informational
+**Status:** Resolved (2026-11-03)
 
-**Issue:** npm audit reports 13 vulnerabilities in electron-icon-builder's dependency tree:
-
-- `form-data` (CRITICAL) - GHSA-fjxv-7rqg-78g4
-- `request` (CRITICAL) - GHSA-p8p7-x288-28g6
-- `tough-cookie` (HIGH) - Multiple CVEs
-- `phin` (moderate) - GHSA-x565-32qp-m3vf
-- `yargs-parser` (moderate) - GHSA-p9pc-299p-vxgp
-
-**Why This Is Not a Security Risk:**
-These packages are only used during development to build application icons. They are **not** bundled into the production application:
-
-1. `electron-icon-builder` is in `devDependencies` (not `dependencies`)
-2. The icon build script (`npm run icons:build`) is only run manually by developers
-3. None of these vulnerable packages are imported or used by the application code
-4. The built application (ASAR) does not contain any of these packages
-
-**Verification:**
-
-```bash
-# Check production-only vulnerabilities (none found)
-npm audit --omit=dev
-
-# The vulnerable packages are only in:
-# node_modules/electron-icon-builder/node_modules/...
-```
-
-**When to Address:**
-
-- When updating or replacing `electron-icon-builder` with a modern alternative
-- If implementing automated icon generation in CI/CD pipelines
-- When electron-icon-builder publishes updates to its dependencies
+`electron-icon-builder` and its vulnerable tree (`form-data`, `request`, `tough-cookie`, `phin`, `yargs-parser`, `phantomjs-prebuilt`, `svg2png`) are removed. `npm run icons:build` now runs `build-icons.py`, which uses Pillow (already required by `generate-icon.py`) to write `icon.icns`, `icon.ico` and `icon.png` from `build/icon-source.png`.
 
 ---
 
@@ -291,4 +260,4 @@ src/renderer/src/components/ui/dialog.tsx(65,43): error TS2503: Cannot find name
 
 1. Implement credential encryption for docker-compose.yml (P2 - High)
 2. Fix pre-existing renderer TypeScript errors (Low)
-3. Replace electron-icon-builder to eliminate dev-only vulnerabilities (Informational)
+3. ~~Replace electron-icon-builder to eliminate dev-only vulnerabilities~~ (done 2026-11-03)

@@ -11,6 +11,12 @@ function App(): React.JSX.Element {
     loadSettings()
   }, [loadSettings])
 
+  // Dialogs, selects and tooltips render in portals outside the app root, so the
+  // theme class goes on <html> for the dark tokens to reach them too.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -35,7 +41,7 @@ function App(): React.JSX.Element {
   }, [showNewProject])
 
   return (
-    <div className={`${theme} h-screen bg-background text-foreground`}>
+    <div className="h-screen bg-background text-foreground">
       <Dashboard onNewProject={() => setShowNewProject(true)} />
       {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
     </div>

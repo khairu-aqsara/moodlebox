@@ -45,92 +45,104 @@ export function SettingsModal({ onClose }: SettingsModalProps): React.JSX.Elemen
     setLocalFolder(useSettingsStore.getState().workspaceFolder)
   }
 
+  const themeOption = (
+    value: 'light' | 'dark',
+    label: string,
+    Icon: typeof Sun
+  ): React.JSX.Element => (
+    <button
+      type="button"
+      onClick={() => setLocalTheme(value)}
+      aria-pressed={localTheme === value}
+      className={cn(
+        'inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-key text-sm font-medium transition-[background-color,transform] duration-micro ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px motion-reduce:transition-none',
+        localTheme === value
+          ? 'bg-signal text-signal-ink shadow-key-primary'
+          : 'text-ink-2 hover:bg-paper-2'
+      )}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      {label}
+    </button>
+  )
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-md mx-4 bg-background/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+    >
+      <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-entry bg-paper-2 shadow-lift ring-1 ring-ink">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border/50">
+        <div className="flex items-start justify-between gap-4 bg-head px-6 py-4 text-head-ink">
           <div>
-            <h2 className="text-xl font-bold">Settings</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Configure your MoodleBox preferences
-            </p>
+            <h2
+              id="settings-title"
+              className="font-display text-xl font-semibold leading-none tracking-display"
+            >
+              Settings
+            </h2>
+            <p className="mt-2 text-sm opacity-80">Configure your MoodleDocks preferences</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
-            <X className="h-4 w-4" />
-          </Button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close settings"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-key text-head-ink transition-colors duration-micro hover:bg-head-ink/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="flex flex-col gap-6 p-6">
           {/* Theme Selection */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Theme</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setLocalTheme('light')}
-                className={cn(
-                  'relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
-                  localTheme === 'light'
-                    ? 'border-primary bg-primary/10'
-                    : 'border-border/50 hover:border-border bg-background/50'
-                )}
-              >
-                <Sun className="h-6 w-6" />
-                <span className="text-sm font-medium">Light</span>
-                {localTheme === 'light' && (
-                  <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary" />
-                )}
-              </button>
-
-              <button
-                onClick={() => setLocalTheme('dark')}
-                className={cn(
-                  'relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
-                  localTheme === 'dark'
-                    ? 'border-primary bg-primary/10'
-                    : 'border-border/50 hover:border-border bg-background/50'
-                )}
-              >
-                <Moon className="h-6 w-6" />
-                <span className="text-sm font-medium">Dark</span>
-                {localTheme === 'dark' && (
-                  <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary" />
-                )}
-              </button>
+          <div className="flex flex-col gap-3" role="group" aria-labelledby="settings-theme">
+            <span id="settings-theme" className="text-sm font-medium text-ink-2">
+              Theme
+            </span>
+            <div className="flex gap-1 rounded-key bg-paper-3 p-1">
+              {themeOption('light', 'Light', Sun)}
+              {themeOption('dark', 'Dark', Moon)}
             </div>
           </div>
 
           {/* Workspace Folder */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Workspace Folder</label>
-            <p className="text-xs text-muted-foreground">
-              Location for storing Docker Compose files and Moodle source code
-            </p>
+          <div className="flex flex-col gap-3" role="group" aria-labelledby="settings-folder">
+            <div>
+              <span id="settings-folder" className="text-sm font-medium text-ink-2">
+                Workspace Folder
+              </span>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Location for storing Docker Compose files and Moodle source code
+              </p>
+            </div>
             <div className="flex gap-2">
-              <div className="flex-1 px-3 py-2 text-sm bg-muted/50 rounded-lg border border-border/50 truncate">
+              <div
+                className="flex h-10 min-w-0 flex-1 items-center truncate rounded-key border border-input bg-sheet px-3 font-mono text-sm text-ink"
+                title={localFolder || undefined}
+              >
                 {localFolder || 'Not set'}
               </div>
               <Button
-                variant="secondary"
+                variant="outline"
                 size="icon"
                 onClick={handleBrowse}
-                className="h-10 w-10 shrink-0"
+                aria-label="Choose workspace folder"
               >
-                <FolderOpen className="h-4 w-4" />
+                <FolderOpen aria-hidden="true" />
               </Button>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-border/50">
+        <div className="flex items-center justify-end gap-2 border-t border-rule px-6 py-4">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} className="rounded-full">
-            Save Changes
-          </Button>
+          <Button onClick={handleSave}>Save Changes</Button>
         </div>
       </div>
     </div>

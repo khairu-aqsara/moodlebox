@@ -1,10 +1,10 @@
 #!/bin/bash
-# Fix macOS Quarantine Issue for MoodleBox
+# Fix macOS Quarantine Issue for MoodleDocks
 # This script removes the quarantine attribute that causes "damaged app" errors
 
 set -e
 
-echo "🔧 MoodleBox macOS Quarantine Fix"
+echo "🔧 MoodleDocks macOS Quarantine Fix"
 echo "=================================="
 echo ""
 
@@ -23,10 +23,10 @@ fix_quarantine() {
 }
 
 # Check for DMG files in Downloads
-DMG_FILES=(~/Downloads/moodlebox*.dmg)
+DMG_FILES=(~/Downloads/moodledocks*.dmg)
 if [ -e "${DMG_FILES[0]}" ]; then
-    echo "Found MoodleBox DMG files in Downloads:"
-    for dmg in ~/Downloads/moodlebox*.dmg; do
+    echo "Found MoodleDocks DMG files in Downloads:"
+    for dmg in ~/Downloads/moodledocks*.dmg; do
         [ -e "$dmg" ] || continue
         echo "  - $(basename "$dmg")"
         fix_quarantine "$dmg"
@@ -35,16 +35,16 @@ if [ -e "${DMG_FILES[0]}" ]; then
 fi
 
 # Check for installed app
-APP_PATH="/Applications/MoodleBox.app"
+APP_PATH="/Applications/MoodleDocks.app"
 if [ -d "$APP_PATH" ]; then
-    echo "Found installed MoodleBox app"
+    echo "Found installed MoodleDocks app"
     fix_quarantine "$APP_PATH"
     echo ""
 fi
 
-echo "✅ Done! You can now open MoodleBox normally."
+echo "✅ Done! You can now open MoodleDocks normally."
 echo ""
 echo "If you still see issues, try:"
 echo "  1. Restart your Mac"
 echo "  2. Run: sudo spctl --master-disable (disables Gatekeeper temporarily)"
-echo "  3. Open MoodleBox, then run: sudo spctl --master-enable"
+echo "  3. Open MoodleDocks, then run: sudo spctl --master-enable"
