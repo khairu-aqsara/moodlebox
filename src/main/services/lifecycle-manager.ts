@@ -5,7 +5,9 @@ import { DockerService } from './docker-service'
 import fetch from 'node-fetch'
 import log from 'electron-log'
 import { getAssetPath } from '../utils/asset-path'
-import { HTTP_WAIT } from '../constants'
+import { HTTP_WAIT, CRON_READY_MARKER } from '../constants'
+import { promises as fs } from 'fs'
+import { join } from 'path'
 
 /**
  * Query GitHub tags API and return the latest stable tag for a given major.minor version.
@@ -30,7 +32,7 @@ export async function resolveLatestTag(majorMinor: string): Promise<string> {
         `https://api.github.com/repos/moodle/moodle/tags?per_page=100&page=${page}`,
         {
           signal: controller.signal,
-          headers: { 'User-Agent': 'MoodleBox/1.0' }
+          headers: { 'User-Agent': 'MoodleDocks/1.0' }
         } as Parameters<typeof fetch>[1]
       )
 
@@ -69,6 +71,24 @@ export async function resolveLatestTag(majorMinor: string): Promise<string> {
   }
 
   return bestTag
+}
+
+/**
+ * Report one start step. The short phase becomes the label in the project row,
+ * and the message is the longer text in its tooltip.
+ */
+function reportStep(
+  onStatusUpdate: (
+    status: Project['status'],
+    errorMessage?: string,
+    statusDetail?: string,
+    progress?: ProgressInfo
+  ) => void,
+  status: Project['status'],
+  phase: string,
+  message: string
+): void {
+  onStatusUpdate(status, undefined, message, { phase, message })
 }
 
 export class LifecycleManager {
@@ -130,9 +150,10 @@ export class LifecycleManager {
 
     if (!alreadyDownloaded) {
       // Resolve latest stable tag from GitHub before downloading
-      onStatusUpdate(
+      reportStep(
+        onStatusUpdate,
         'provisioning',
-        undefined,
+        'resolve',
         `Resolving latest Moodle ${version.version} release...`
       )
       onLog?.(`🔍 Resolving latest Moodle ${version.version} release from GitHub...`)
@@ -140,7 +161,7 @@ export class LifecycleManager {
       const moodleDownloadUrl = `https://github.com/moodle/moodle/archive/refs/tags/${tag}.zip`
       onLog?.(`✓ Resolved: ${tag}`)
 
-      onStatusUpdate('provisioning', undefined, 'Downloading Moodle source code...')
+      reportStep(onStatusUpdate, 'provisioning', 'download', 'Downloading Moodle source code...')
       onLog?.('📥 Downloading Moodle source code...')
       onLog?.(
         '💡 Tip: Large downloads may take 20-30+ minutes on slow connections. Progress will be shown below.'
@@ -239,33 +260,48 @@ export class LifecycleManager {
     onLog?: (log: string) => void
   ): Promise<void> {
     // 1. Starting - Launch containers
-    onStatusUpdate('starting', undefined, 'Starting Docker containers...')
+    reportStep(onStatusUpdate, 'starting', 'containers', 'Starting Docker containers...')
     onLog?.('🐳 Starting Docker containers...')
+
+    // compose up pulls missing images first. Show that step while Docker prints
+    // "Pulling", then go back to "Starting containers" once it creates resources.
+    let pullStep: 'none' | 'pulling' | 'done' = 'none'
+    const watchComposeOutput = (output: string): void => {
+      onLog?.(output)
+      if (pullStep === 'none' && /\bPulling\b/.test(output)) {
+        pullStep = 'pulling'
+        reportStep(onStatusUpdate, 'starting', 'pull', 'Pulling Docker images...')
+      } else if (pullStep === 'pulling' && /\b(Creating|Created|Starting|Started)\b/.test(output)) {
+        pullStep = 'done'
+        reportStep(onStatusUpdate, 'starting', 'containers', 'Starting Docker containers...')
+      }
+    }
 
     await this.dockerService.composeUp({
       cwd: project.path,
-      onStdout: onLog,
-      onStderr: onLog
+      onStdout: watchComposeOutput,
+      onStderr: watchComposeOutput
     })
 
     // 2. Waiting - Wait for database
-    onStatusUpdate('waiting', undefined, 'Waiting for database to be ready...')
+    reportStep(onStatusUpdate, 'waiting', 'database', 'Waiting for database to be ready...')
     onLog?.('⏳ Waiting for database to be ready...')
 
     await this.dockerService.waitForHealthy('db', project.path)
     onLog?.('✓ Database is ready')
 
     // 3. Check if Moodle is installed (inside running container)
-    onStatusUpdate('waiting', undefined, 'Checking Moodle installation status...')
+    reportStep(onStatusUpdate, 'waiting', 'database', 'Checking Moodle installation status...')
     onLog?.('🔍 Checking Moodle installation status...')
 
     const alreadyInstalled = await this.installer.isInstalled(project.path)
 
     if (!alreadyInstalled) {
       // 4. Installing - Create config and run Moodle CLI install
-      onStatusUpdate(
+      reportStep(
+        onStatusUpdate,
         'installing',
-        undefined,
+        'install',
         'Installing Moodle (It may take some time, depending on your computer and internet.)...'
       )
       onLog?.(
@@ -277,7 +313,7 @@ export class LifecycleManager {
       onLog?.('✓ Moodle installed successfully')
 
       // 5. Restore sample course
-      onStatusUpdate('installing', undefined, 'Restoring sample course...')
+      reportStep(onStatusUpdate, 'installing', 'course', 'Restoring sample course...')
       onLog?.('📚 Restoring sample course...')
       try {
         const courseBackupPath = getAssetPath('courses.mbz')
@@ -293,8 +329,11 @@ export class LifecycleManager {
       onLog?.('✓ Moodle already installed, skipping installation')
     }
 
+    // 6. Let the cron container start running scheduled tasks
+    await fs.writeFile(join(project.path, 'moodledata', CRON_READY_MARKER), '')
+
     // 7. Ready - Wait for HTTP
-    onStatusUpdate('starting', undefined, 'Waiting for Moodle web server...')
+    reportStep(onStatusUpdate, 'starting', 'webserver', 'Waiting for Moodle web server...')
     onLog?.('⏳ Waiting for Moodle web server...')
     await this.waitForHttp(project.port, onLog)
 
@@ -342,7 +381,7 @@ export class LifecycleManager {
           const response = await fetch(url, {
             signal: controller.signal,
             headers: {
-              'User-Agent': 'MoodleBox/1.0'
+              'User-Agent': 'MoodleDocks/1.0'
             }
           } as RequestInit)
 

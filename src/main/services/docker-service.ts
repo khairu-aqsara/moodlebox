@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
 import { createServer, Server } from 'net'
 import { basename } from 'path'
 import log from 'electron-log'
@@ -480,6 +481,11 @@ export class DockerService {
       })
 
       proc.on('error', (err) => {
+        // Node reports a missing cwd as "spawn docker ENOENT", the same as a missing binary.
+        if (!existsSync(options.cwd)) {
+          reject(new Error(`Project folder not found: ${options.cwd}`))
+          return
+        }
         // Handle cases where docker command itself fails (not installed, etc.)
         const enhancedError = new Error(
           `Docker command failed: ${err.message}\n\n` +

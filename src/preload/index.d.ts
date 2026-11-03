@@ -24,6 +24,7 @@ declare global {
       }
       app: {
         getLogPath: () => Promise<string>
+        getVersion: () => Promise<string>
         openLogFolder: () => Promise<void>
       }
       settings: {

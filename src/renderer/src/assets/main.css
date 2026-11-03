@@ -1,88 +1,70 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Furrow (by request) · redesign: full
+ * nav: top bar, wordmark left, Settings and New Project keys right (replaces the speed-dial) · signature: the project book, a ruled list where a live project opens a notebook strip · states: empty, error (Docker), no matches, loading logs, full
+ * axes: light/grotesk-sans/warm · posture: committed · contrast: pass · modes: light+dark · v2.0.0 */
+/* Hallmark · dropped the speed-dial (toggleFab, its two menu handlers) · its Settings and New Project actions moved to the top bar; setLocalTheme now runs through themeOption */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V4 · weakest: P, a project list is a familiar object; the notebook strip with mono figures for the site, login and progress is the argument */
+@import url('./tokens.css');
+@import url('./floor.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* shadcn names point at the Furrow tokens; tailwind.config.js wraps each for opacity. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --radius: 0.5rem;
+    --background: var(--color-paper);
+    --foreground: var(--color-ink);
+    --card: var(--color-paper-2);
+    --card-foreground: var(--color-ink);
+    --popover: var(--color-sheet);
+    --popover-foreground: var(--color-ink);
+    --primary: var(--color-accent);
+    --primary-foreground: var(--color-accent-ink);
+    --secondary: var(--color-paper-3);
+    --secondary-foreground: var(--color-ink-2);
+    --muted: var(--color-paper-3);
+    --muted-foreground: var(--color-muted);
+    --accent: var(--color-paper-3);
+    --accent-foreground: var(--color-ink);
+    --destructive: var(--color-error);
+    --destructive-foreground: var(--color-paper-2);
+    --border: var(--color-rule);
+    --input: var(--color-muted);
+    --ring: var(--color-focus);
+    --radius: var(--radius-card);
   }
 
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-  }
-}
-
-@layer base {
   * {
     @apply border-border;
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: 'DM Mono', monospace;
+    @apply bg-background text-foreground font-sans;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: var(--display-weight);
+    letter-spacing: var(--tracking-display);
   }
 }
 
-/* Modern scrollbar styling */
+@layer components {
+  /* Furrow notebook: an 8px grid on the white page, parted by ink lines. */
+  .notebook {
+    background:
+      linear-gradient(var(--color-grid) 1px, transparent 1px) 0 0 / 8px 8px,
+      linear-gradient(90deg, var(--color-grid) 1px, transparent 1px) 0 0 / 8px 8px,
+      var(--color-paper-2);
+  }
+}
+
 @layer utilities {
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.3);
-    border-radius: 4px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.5);
+    scrollbar-color: color-mix(in oklab, var(--color-muted) 45%, transparent) transparent;
   }
 }

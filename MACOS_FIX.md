@@ -2,9 +2,9 @@
 
 ## The Problem
 
-When users download MoodleBox built from GitHub Actions and try to open it, macOS shows:
+When users download MoodleDocks built from GitHub Actions and try to open it, macOS shows:
 
-> "MoodleBox is damaged and can't be opened. You should move it to the Trash."
+> "MoodleDocks is damaged and can't be opened. You should move it to the Trash."
 
 This happens even when right-clicking → Open, which normally bypasses Gatekeeper.
 
@@ -53,7 +53,7 @@ dmg:
 Automatically removes quarantine attributes from:
 
 - Downloaded DMG files in `~/Downloads/`
-- Installed app at `/Applications/MoodleBox.app`
+- Installed app at `/Applications/MoodleDocks.app`
 
 #### 3. Updated README.md
 
@@ -73,7 +73,7 @@ Added installation instructions to release notes with quarantine fix commands.
 ### Option 1: Before Opening DMG (Recommended)
 
 ```bash
-xattr -cr ~/Downloads/moodlebox-*.dmg
+xattr -cr ~/Downloads/moodledocks-*.dmg
 ```
 
 Then open the DMG normally.
@@ -83,7 +83,7 @@ Then open the DMG normally.
 If the app is already installed but won't open:
 
 ```bash
-xattr -cr /Applications/MoodleBox.app
+xattr -cr /Applications/MoodleDocks.app
 ```
 
 ### Option 3: Use Fix Script
@@ -160,7 +160,7 @@ After making these changes:
    - Push changes and trigger workflow
    - Download the built DMG from artifacts
    - Try opening without removing quarantine (should still fail)
-   - Run fix command: `xattr -cr ~/Downloads/moodlebox-*.dmg`
+   - Run fix command: `xattr -cr ~/Downloads/moodledocks-*.dmg`
    - Should now open successfully
 
 ## References

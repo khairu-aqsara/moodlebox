@@ -1,6 +1,6 @@
-appId: com.moodlebox.app
-productName: MoodleBox
-copyright: Copyright © 2025-2026 MoodleBox @khairu-aqsara
+appId: com.moodledocks.app
+productName: MoodleDocks
+copyright: Copyright © 2025-2026 MoodleDocks @khairu-aqsara
 
 directories:
   buildResources: build
@@ -20,6 +20,7 @@ files:
   - '!PRD.md'
   - '!CLAUDE.md'
   - '!generate-icon.py'
+  - '!build-icons.py'
   - '!build/icons/*'
   - '!build/icon-source.png'
   # Exclude unnecessary node_modules files
@@ -98,16 +99,18 @@ win:
     - target: nsis
       arch: [x64, arm64] # x64 and ARM64
   icon: build/icon.ico
-  executableName: MoodleBox
-  publisherName: MoodleBox Team
+  executableName: MoodleDocks
   # Code signing configuration (optional via environment variables)
   # For unsigned builds (CI/CD): leave certificateFile as null
   # For signed builds: Set CSC_LINK environment variable to path of .pfx certificate file
   # electron-builder will automatically detect CSC_LINK env var and sign when present
   # If CSC_LINK is not set, builds will be unsigned (works for CI/CD)
-  certificateFile: null
-  certificatePassword: null
-  sign: null
+  # electron-builder 26 reads these signing options from signtoolOptions.
+  signtoolOptions:
+    publisherName: MoodleDocks Team
+    certificateFile: null
+    certificatePassword: null
+    sign: null
 
 nsis:
   artifactName: ${name}-${version}-${arch}-setup.${ext}
@@ -130,12 +133,12 @@ linux:
       arch: [x64, arm64]
   icon: build/icon.png
   category: Development
-  executableName: moodlebox
-  maintainer: MoodleBox Team <support@moodlebox.dev>
-  vendor: MoodleBox Team
+  executableName: moodledocks
+  maintainer: MoodleDocks Team <support@moodlebox.dev>
+  vendor: MoodleDocks Team
   synopsis: Local Moodle development environment
   description: |
-    MoodleBox is a cross-platform desktop application that simplifies
+    MoodleDocks is a cross-platform desktop application that simplifies
     local Moodle development environments with one-click Docker setup.
 
 appImage:

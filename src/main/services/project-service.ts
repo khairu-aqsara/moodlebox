@@ -969,15 +969,21 @@ export class ProjectService {
     // Set status to deleting
     this.updateProject(id, { status: 'deleting' })
 
-    // Stop and remove containers, volumes, and networks
-    try {
-      await this.dockerService.composeDown({
-        cwd: project.path,
-        removeVolumes: true
-      })
-    } catch (error) {
-      log.error('Error cleaning up Docker resources:', error)
-      // Continue with deletion even if Docker cleanup fails
+    // Stop and remove containers, volumes, and networks.
+    // Without the folder there is no docker-compose.yml, so compose down cannot run.
+    const folderStats = await fs.stat(project.path).catch(() => null)
+    if (!folderStats) {
+      log.warn(`Project folder not found, skipping Docker cleanup: ${project.path}`)
+    } else {
+      try {
+        await this.dockerService.composeDown({
+          cwd: project.path,
+          removeVolumes: true
+        })
+      } catch (error) {
+        log.error('Error cleaning up Docker resources:', error)
+        // Continue with deletion even if Docker cleanup fails
+      }
     }
 
     // Delete project directory
@@ -1189,7 +1195,7 @@ export class ProjectService {
     const apacheConf = this.composeGenerator.generateApacheConfig(version, hostPort)
     await fs.writeFile(join(configDir, 'apache.conf'), apacheConf)
 
-    const phpIni = `; MoodleBox - PHP configuration
+    const phpIni = `; MoodleDocks - PHP configuration
 ; Edit this file and restart the moodle container to apply changes:
 ;   docker compose restart moodle
 ;
@@ -1205,7 +1211,7 @@ upload_max_filesize = 128M
 `
 
     const mysqlCnf = `[mysqld]
-# MoodleBox - Additional MySQL configuration
+# MoodleDocks - Additional MySQL configuration
 # Edit this file and restart the database container to apply changes:
 #   docker compose restart db
 #

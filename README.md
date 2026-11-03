@@ -1,8 +1,11 @@
-# MoodleBox
+# MoodleDocks
+
+> [!NOTE]
+> **MoodleBox is now MoodleDocks.** A big thank you to Thom Rawson ([@tallthom](https://github.com/tallthom)) for the new name: "Docks" is short for Docker. The new name also keeps this app apart from [MoodleBox](https://moodlebox.net), the Moodle server for Raspberry Pi. Your existing projects and settings carry over, because the app keeps its data folders under the old name.
 
 <div align="center">
 
-![MoodleBox Logo](image.png)
+![MoodleDocks Logo](image.png)
 
 **A local Moodle environment for everyone**
 
@@ -12,20 +15,20 @@
 
 ## 📸 Screenshots
 
-![MoodleBox Screenshot](image.jpg)
+![MoodleDocks Screenshot](image.jpg)
 
 ---
 
 ## 🎯 Overview
 
-**MoodleBox** is a cross-platform desktop application that simplifies local Moodle development environments. Set up a complete Moodle environment in under 5 minutes with zero Docker knowledge required.
+**MoodleDocks** is a cross-platform desktop application that simplifies local Moodle development environments. Set up a complete Moodle environment in under 5 minutes with zero Docker knowledge required.
 
 ---
 
 ## 📦 Prerequisites
 
 - **Docker Desktop** (20.10+) - [Download](https://www.docker.com/products/docker-desktop)
-- Ensure Docker is running before launching MoodleBox
+- Ensure Docker is running before launching MoodleDocks
 
 ---
 
@@ -38,7 +41,7 @@
 | **5.1** |       |
 | **4.5** | LTS   |
 
-MoodleBox installs the latest patch release of the version you choose (for example 5.2.4) when the project is first started. Existing projects are not upgraded automatically.
+MoodleDocks installs the latest patch release of the version you choose (for example 5.2.4) when the project is first started. Existing projects are not upgraded automatically.
 
 Versions that are no longer supported by Moodle (such as 5.0) can't be selected for new projects, but existing projects on those versions still start.
 
@@ -50,13 +53,13 @@ Versions that are no longer supported by Moodle (such as 5.0) can't be selected 
 
 Download the latest release for your platform:
 
-- **Windows**: `moodlebox-{version}-setup.exe`
-- **macOS**: `moodlebox-{version}.dmg`
-- **Linux**: `moodlebox-{version}.AppImage` or `.deb`
+- **Windows**: `moodledocks-{version}-setup.exe`
+- **macOS**: `moodledocks-{version}.dmg`
+- **Linux**: `moodledocks-{version}.AppImage` or `.deb`
 
 #### ⚠️ macOS Warning: Unsigned App
 
-MoodleBox is currently **unsigned** and may be blocked by macOS Gatekeeper. If you see "MoodleBox is damaged" error:
+MoodleDocks is currently **unsigned** and may be blocked by macOS Gatekeeper. If you see "MoodleDocks is damaged" error:
 
 **Solution 1: Use Fix Script (Easiest)**
 
@@ -71,7 +74,7 @@ chmod +x fix-macos-quarantine.sh
 
 ```bash
 # After downloading the .dmg file, run this in Terminal:
-xattr -cr ~/Downloads/moodlebox-*.dmg
+xattr -cr ~/Downloads/moodledocks-*.dmg
 
 # Then open the DMG normally
 ```
@@ -81,13 +84,13 @@ xattr -cr ~/Downloads/moodlebox-*.dmg
 1. Try to open the `.dmg` file (you'll see the "damaged" error)
 2. Open **Terminal** and run:
    ```bash
-   xattr -cr /Applications/MoodleBox.app
+   xattr -cr /Applications/MoodleDocks.app
    ```
-3. Now launch MoodleBox from Applications
+3. Now launch MoodleDocks from Applications
 
 **Solution 4: System Settings**
 
-1. Try to open MoodleBox
+1. Try to open MoodleDocks
 2. Go to **System Settings → Privacy & Security**
 3. Click **Open Anyway** next to the blocked app message
 
@@ -158,7 +161,7 @@ The icon files are located in `build/`:
 ## ⚡ Quick Start
 
 1. **Ensure Docker Desktop is running**
-2. **Launch MoodleBox**
+2. **Launch MoodleDocks**
 3. **Click the round button** in the bottom-right corner, then **New Project** (or **Create Your First Project** if the list is empty)
 4. **Enter a project name** and select a Moodle version
 5. **Click "Create Project"**, then click **Start Project** (▶) on the new project card

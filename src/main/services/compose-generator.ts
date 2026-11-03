@@ -1,5 +1,6 @@
 import { MoodleVersion, Project } from '../types'
 import { randomBytes } from 'crypto'
+import { CRON_READY_MARKER } from '../constants'
 
 export class ComposeGenerator {
   generate(project: Project, version: MoodleVersion): string {
@@ -18,7 +19,7 @@ export class ComposeGenerator {
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata
-      - ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini
+      - ./config/php.ini:/usr/local/etc/php/conf.d/moodledocks.ini
       - ./config/apache.conf:/etc/apache2/sites-available/000-default.conf
     environment:
       - MOODLE_DBTYPE=mysqli
@@ -40,12 +41,13 @@ export class ComposeGenerator {
     image: ${moodleImage}
     # Moodle times cron from one run's start to the next and warns above 1 minute.
     # cron.php keeps itself alive for 3 minutes by default, so cap it below a minute.
+    # The loop starts only after the app writes the ready marker at the end of the installation.
     command: >
-      /bin/bash -c "while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"
+      /bin/bash -c "until [ -f /var/www/moodledata/${CRON_READY_MARKER} ]; do sleep 5; done; while true; do php /var/www/html/admin/cli/cron.php --keep-alive=50; sleep 5; done"
     volumes:
       - ./moodlecode:/var/www/html
       - ./moodledata:/var/www/moodledata
-      - ./config/php.ini:/usr/local/etc/php/conf.d/moodlebox.ini
+      - ./config/php.ini:/usr/local/etc/php/conf.d/moodledocks.ini
     environment:
       - MOODLE_DBTYPE=mysqli
       - MOODLE_DBHOST=db
@@ -83,7 +85,7 @@ export class ComposeGenerator {
       - MYSQL_PASSWORD=${password}
     volumes:
       - ./mysql_data:/var/lib/mysql
-      - ./config/mysql.cnf:/etc/mysql/conf.d/moodlebox.cnf
+      - ./config/mysql.cnf:/etc/mysql/conf.d/moodledocks.cnf
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${password}"]
       interval: 5s

@@ -213,13 +213,14 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
             Set up a new Moodle development environment
-            <span className="text-xs text-muted-foreground block mt-1">Press Escape to cancel</span>
+            <span className="mt-1 block text-xs text-muted-foreground">Press Escape to cancel</span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4 overflow-y-auto">
+        {/* auto-rows-max: rows keep their full height when the dialog is short and the form scrolls. */}
+        <div className="custom-scrollbar -mr-2 grid auto-rows-max gap-4 overflow-y-auto py-4 pr-2">
           {errors.general && (
-            <div className="rounded-lg bg-destructive/15 border border-destructive/50 p-3 text-sm text-destructive">
+            <div className="rounded-card bg-danger-soft p-3 text-sm font-medium text-danger">
               {errors.general}
             </div>
           )}
@@ -234,12 +235,11 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
                 setProjectName(e.target.value)
                 if (errors.name) setErrors({ ...errors, name: '' })
               }}
-              className={errors.name ? 'border-destructive' : ''}
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? 'name-error' : 'name-help'}
             />
             {errors.name && (
-              <p id="name-error" className="text-xs text-destructive" role="alert">
+              <p id="name-error" className="text-xs font-medium text-danger" role="alert">
                 {errors.name}
               </p>
             )}
@@ -259,7 +259,6 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
             >
               <SelectTrigger
                 id="version"
-                className={errors.moodleVersion ? 'border-destructive' : ''}
                 aria-invalid={!!errors.moodleVersion}
                 aria-describedby={errors.moodleVersion ? 'version-error' : undefined}
               >
@@ -275,7 +274,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
               </SelectContent>
             </Select>
             {errors.moodleVersion && (
-              <p id="version-error" className="text-xs text-destructive" role="alert">
+              <p id="version-error" className="text-xs font-medium text-danger" role="alert">
                 {errors.moodleVersion}
               </p>
             )}
@@ -300,14 +299,14 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
                 }
                 if (errors.port) setErrors({ ...errors, port: '' })
               }}
-              className={errors.port ? 'border-destructive' : ''}
+              className="font-mono"
               min={1024}
               max={65535}
               aria-invalid={!!errors.port}
               aria-describedby={errors.port ? 'port-error' : 'port-help'}
             />
             {errors.port && (
-              <p id="port-error" className="text-xs text-destructive" role="alert">
+              <p id="port-error" className="text-xs font-medium text-danger" role="alert">
                 {errors.port}
               </p>
             )}
@@ -326,7 +325,7 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
                 setPhpMyAdminPort(e.target.value)
                 if (errors.phpMyAdminPort) setErrors({ ...errors, phpMyAdminPort: '' })
               }}
-              className={errors.phpMyAdminPort ? 'border-destructive' : ''}
+              className="font-mono"
               min={1024}
               max={65535}
               aria-invalid={!!errors.phpMyAdminPort}
@@ -335,7 +334,11 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
               }
             />
             {errors.phpMyAdminPort && (
-              <p id="phpmyadmin-port-error" className="text-xs text-destructive" role="alert">
+              <p
+                id="phpmyadmin-port-error"
+                className="text-xs font-medium text-danger"
+                role="alert"
+              >
                 {errors.phpMyAdminPort}
               </p>
             )}
@@ -345,13 +348,44 @@ export function NewProjectModal({ onClose }: NewProjectModalProps): React.JSX.El
           </div>
 
           {selectedVersionData && (
-            <div className="rounded-lg bg-muted p-3 text-sm">
-              <p className="font-medium mb-1">Auto-configured:</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• PHP {selectedVersionData.requirements.php}</li>
-                <li>• MySQL {selectedVersionData.requirements.mysql}</li>
-                <li>• phpMyAdmin on port {phpMyAdminPort || '8081'}</li>
-              </ul>
+            <div className="overflow-hidden rounded-card ring-1 ring-rule dark:ring-ink">
+              <table className="w-full bg-sheet text-sm dark:notebook">
+                <caption className="sr-only">Auto-configured settings</caption>
+                <thead className="bg-head text-xs text-head-ink">
+                  <tr>
+                    <th scope="col" className="w-2/5 px-3 py-2 text-left font-medium">
+                      Configured
+                    </th>
+                    <th scope="col" className="px-3 py-2 text-left font-medium">
+                      Value
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['PHP', selectedVersionData.requirements.php],
+                    ['MySQL', selectedVersionData.requirements.mysql],
+                    [
+                      'Moodle',
+                      `${selectedVersionData.version} (${selectedVersionData.type.toUpperCase()})`
+                    ],
+                    ['Moodle URL', `http://localhost:${port || '8080'}`],
+                    ['phpMyAdmin URL', `http://localhost:${phpMyAdminPort || '8081'}`]
+                  ].map(([label, value]) => (
+                    <tr key={label} className="border-t border-rule first:border-t-0">
+                      <th
+                        scope="row"
+                        className="px-3 py-2 text-left font-normal text-muted-foreground"
+                      >
+                        {label}
+                      </th>
+                      <td className="px-3 py-2 font-mono text-ink [overflow-wrap:anywhere]">
+                        {value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

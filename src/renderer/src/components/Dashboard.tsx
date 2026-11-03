@@ -2,11 +2,34 @@ import { useEffect, useState, useMemo } from 'react'
 import { useProjectStore } from '../store/project-store'
 import { ProjectCard } from './ProjectCard'
 import { SettingsModal } from './SettingsModal'
-import { Plus, Settings, Sliders, AlertTriangle, RefreshCw, Search, X } from 'lucide-react'
+import { AboutModal } from './AboutModal'
+import {
+  Plus,
+  Sliders,
+  CircleQuestionMark,
+  AlertTriangle,
+  RefreshCw,
+  Search,
+  X
+} from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { cn } from '../lib/utils'
+
+const EMPTY_STEPS = [
+  { title: 'Name it', detail: 'Pick a Moodle version and a port.' },
+  { title: 'Start it', detail: 'Docker runs Moodle with PHP, MySQL and phpMyAdmin.' },
+  {
+    title: 'Sign in',
+    detail: (
+      <>
+        Open <span className="font-mono text-ink">localhost:&lt;port&gt;</span> and log in as{' '}
+        <span className="font-mono text-ink">admin / admin</span>.
+      </>
+    )
+  }
+]
 
 interface DashboardProps {
   onNewProject: () => void
@@ -15,10 +38,10 @@ interface DashboardProps {
 export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
   const projects = useProjectStore((state) => state.projects)
   const loadProjects = useProjectStore((state) => state.loadProjects)
-  const [isFabOpen, setIsFabOpen] = useState(false)
   const [dockerError, setDockerError] = useState(false)
   const [isCheckingDocker, setIsCheckingDocker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [versionFilter, setVersionFilter] = useState<string>('all')
@@ -81,8 +104,6 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const toggleFab = (): void => setIsFabOpen(!isFabOpen)
-
   // Memoize filtered projects - must be at top level, not conditional
   const filteredProjects = useMemo(() => {
     let filtered = projects
@@ -111,147 +132,222 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
     return filtered
   }, [projects, searchQuery, statusFilter, versionFilter])
 
+  const hasFilters = Boolean(searchQuery) || statusFilter !== 'all' || versionFilter !== 'all'
+
   return (
-    <div className="flex flex-col h-full relative">
-      {/* Modern Glassmorphic Header */}
-      <header
-        className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60"
-        role="banner"
-      >
-        <div className="flex h-16 items-center px-6">
-          <div className="flex flex-col gap-0.5">
-            <h1 className="text-xl font-bold tracking-tight">MoodleBox</h1>
-            <p className="text-xs text-muted-foreground font-medium">Local Moodle Environment</p>
+    <div className="flex h-full flex-col">
+      <header className="shrink-0 border-b border-ink bg-paper" role="banner">
+        <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-6">
+          <div className="flex min-w-0 items-baseline gap-3">
+            <h1 className="font-display text-2xl font-semibold leading-none tracking-display">
+              MoodleDocks
+            </h1>
+            <p className="truncate text-sm text-muted-foreground">Local Moodle Environment</p>
           </div>
+          {!dockerError && (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowSettings(true)}
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Sliders aria-hidden="true" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowAbout(true)}
+                aria-label="About MoodleDocks"
+                title="About MoodleDocks"
+              >
+                <CircleQuestionMark aria-hidden="true" />
+              </Button>
+              {projects.length > 0 && (
+                <Button onClick={onNewProject} title="New Project (Ctrl or Cmd + N)">
+                  <Plus aria-hidden="true" />
+                  New Project
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-hidden flex flex-col px-4 py-6 pb-32" role="main">
-        {dockerError ? (
-          <div className="flex flex-col items-center justify-center flex-1 text-center">
-            <div className="max-w-md">
-              <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-destructive/15">
-                <AlertTriangle className="h-10 w-10 text-destructive" />
+      <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto" role="main">
+        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 pb-16 pt-10">
+          {dockerError ? (
+            <section className="max-w-xl" aria-labelledby="docker-error-title">
+              <div className="overflow-hidden rounded-entry bg-paper-2 shadow-lift ring-1 ring-ink">
+                <div className="flex items-center gap-2 bg-head px-5 py-3 text-sm font-medium text-head-ink">
+                  <AlertTriangle className="h-4 w-4 text-signal" aria-hidden="true" />
+                  Docker
+                </div>
+                <div className="flex flex-col gap-4 p-6">
+                  <h2
+                    id="docker-error-title"
+                    className="font-display text-3xl font-semibold leading-none tracking-display"
+                  >
+                    Docker is not running
+                  </h2>
+                  <p className="text-muted-foreground">
+                    MoodleDocks requires Docker Desktop to create and manage local Moodle
+                    environments. Please start Docker Desktop and try again.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-4 pt-2">
+                    <Button
+                      onClick={checkDocker}
+                      disabled={isCheckingDocker}
+                      aria-busy={isCheckingDocker}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          isCheckingDocker && 'animate-spin motion-reduce:animate-none'
+                        )}
+                        aria-hidden="true"
+                      />
+                      {isCheckingDocker ? 'Checking…' : 'Retry Connection'}
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Don&apos;t have Docker?{' '}
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          window.open('https://docker.com')
+                        }}
+                        className="font-medium text-ink underline decoration-signal decoration-2 underline-offset-4 hover:decoration-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        Download Docker Desktop
+                      </a>
+                    </p>
+                  </div>
+                </div>
               </div>
-              <h2 className="text-2xl font-bold mb-3 text-destructive">Docker is not running</h2>
-              <p className="text-muted-foreground mb-8 leading-relaxed">
-                MoodleBox requires Docker Desktop to create and manage local Moodle environments.
-                <br />
-                Please start Docker Desktop and try again.
-              </p>
-              <div className="flex flex-col gap-3">
-                <Button
-                  onClick={checkDocker}
-                  disabled={isCheckingDocker}
-                  size="lg"
-                  className="rounded-full"
+            </section>
+          ) : projects.length === 0 ? (
+            <section
+              className="my-auto grid items-center gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
+              aria-labelledby="empty-title"
+            >
+              <div className="min-w-0">
+                <h2
+                  id="empty-title"
+                  className="font-display text-4xl font-semibold leading-none tracking-display [overflow-wrap:break-word]"
                 >
-                  <RefreshCw className={cn('mr-2 h-5 w-5', isCheckingDocker && 'animate-spin')} />
-                  {isCheckingDocker ? 'Checking...' : 'Retry Connection'}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  Don&apos;t have Docker?{' '}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      window.open('https://docker.com')
-                    }}
-                    className="text-primary hover:underline"
-                  >
-                    Download Docker Desktop
-                  </a>
+                  No projects yet
+                </h2>
+                <p className="mt-4 max-w-sm text-muted-foreground">
+                  Create your first Moodle project to get started. It takes less than 5 minutes.
                 </p>
+                <Button onClick={onNewProject} className="mt-8">
+                  <Plus aria-hidden="true" />
+                  Create Your First Project
+                </Button>
               </div>
-            </div>
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center flex-1 text-center">
-            <div className="max-w-md">
-              <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
-              <p className="text-muted-foreground mb-6">
-                Create your first Moodle project to get started. It takes less than 5 minutes!
-              </p>
-              <Button onClick={onNewProject} size="lg" className="rounded-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Your First Project
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-6xl mx-auto flex flex-col h-full w-full">
-            <div className="flex items-center justify-between mb-6 flex-shrink-0">
-              <h2 className="text-lg font-semibold tracking-tight">Active Projects</h2>
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
-                {projects.length} {projects.length === 1 ? 'Project' : 'Projects'}
-              </span>
-            </div>
 
-            {/* Search and Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-6 flex-shrink-0">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search projects by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-9"
-                  aria-label="Search projects"
-                />
-                {searchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
-                    onClick={() => setSearchQuery('')}
-                    aria-label="Clear search"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+              <div className="overflow-hidden rounded-entry bg-sheet shadow-lift ring-1 ring-rule dark:notebook dark:ring-ink">
+                <p className="bg-head px-5 py-3 text-sm font-medium text-head-ink">
+                  How a project starts
+                </p>
+                <ol>
+                  {EMPTY_STEPS.map((step, index) => (
+                    <li
+                      key={step.title}
+                      className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 border-t border-rule px-5 py-4 first:border-t-0"
+                    >
+                      <span className="font-mono text-sm text-signal">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <div>
+                        <p className="font-medium text-ink">{step.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]" aria-label="Filter by status">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="ready">Ready</SelectItem>
-                  <SelectItem value="stopped">Stopped</SelectItem>
-                  <SelectItem value="starting">Starting</SelectItem>
-                  <SelectItem value="installing">Installing</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={versionFilter} onValueChange={setVersionFilter}>
-                <SelectTrigger className="w-[180px]" aria-label="Filter by version">
-                  <SelectValue placeholder="All Versions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Versions</SelectItem>
-                  {Array.from(new Set(projects.map((p) => p.moodleVersion)))
-                    .sort()
-                    .reverse()
-                    .map((version) => (
-                      <SelectItem key={version} value={version}>
-                        Moodle {version}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+            </section>
+          ) : (
+            <section aria-labelledby="projects-title">
+              <div className="mb-6 flex items-baseline justify-between gap-4">
+                <h2
+                  id="projects-title"
+                  className="font-display text-3xl font-semibold leading-none tracking-display"
+                >
+                  Active Projects
+                </h2>
+                <span className="text-sm text-muted-foreground">
+                  <span className="font-mono">{projects.length}</span>{' '}
+                  {projects.length === 1 ? 'Project' : 'Projects'}
+                </span>
+              </div>
 
-            {/* Filtered Projects */}
-            <div className="flex-1 min-h-0">
-              {filteredProjects.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p className="text-sm">No projects match your filters.</p>
-                  {(searchQuery || statusFilter !== 'all' || versionFilter !== 'all') && (
+              <div className="mb-8 flex flex-col gap-3 sm:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    placeholder="Search projects by name…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-10"
+                    aria-label="Search projects"
+                  />
+                  {searchQuery && (
                     <Button
                       variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 active:-translate-y-[calc(50%-1px)]"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      <X aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="sm:w-44" aria-label="Filter by status">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="ready">Ready</SelectItem>
+                    <SelectItem value="stopped">Stopped</SelectItem>
+                    <SelectItem value="starting">Starting</SelectItem>
+                    <SelectItem value="installing">Installing</SelectItem>
+                    <SelectItem value="error">Error</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={versionFilter} onValueChange={setVersionFilter}>
+                  <SelectTrigger className="sm:w-44" aria-label="Filter by version">
+                    <SelectValue placeholder="All Versions" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Versions</SelectItem>
+                    {Array.from(new Set(projects.map((p) => p.moodleVersion)))
+                      .sort()
+                      .reverse()
+                      .map((version) => (
+                        <SelectItem key={version} value={version}>
+                          Moodle {version}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {filteredProjects.length === 0 ? (
+                <div className="border-t border-ink py-10">
+                  <p className="text-muted-foreground">No projects match your filters.</p>
+                  {hasFilters && (
+                    <Button
+                      variant="outline"
                       size="sm"
-                      className="mt-2"
+                      className="mt-4"
                       onClick={() => {
                         setSearchQuery('')
                         setStatusFilter('all')
@@ -263,83 +359,19 @@ export function Dashboard({ onNewProject }: DashboardProps): React.JSX.Element {
                   )}
                 </div>
               ) : (
-                <div className="overflow-y-auto overflow-x-hidden h-full custom-scrollbar">
-                  <div className="grid gap-4 pr-2">
-                    {filteredProjects.map((project) => (
-                      <ProjectCard key={project.id} project={project} />
-                    ))}
-                  </div>
+                <div className="border-t border-ink">
+                  {filteredProjects.map((project) => (
+                    <ProjectCard key={project.id} project={project} />
+                  ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
+            </section>
+          )}
+        </div>
       </main>
 
-      {/* Speed Dial FAB */}
-      {!dockerError && (
-        // pointer-events-none on the wrapper: its box spans the (hidden) menu items above the
-        // trigger, and would otherwise swallow clicks on project buttons behind it.
-        <div className="pointer-events-none fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3">
-          {/* Menu Items */}
-          <div
-            className={cn(
-              'flex flex-col items-end gap-3 transition-all duration-300 ease-in-out',
-              isFabOpen
-                ? 'pointer-events-auto opacity-100 translate-y-0 scale-100'
-                : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium bg-background/90 backdrop-blur px-2 py-1 rounded-md shadow-sm border border-border/50">
-                Settings
-              </span>
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 rounded-full shadow-md [&_svg]:size-4"
-                onClick={() => {
-                  setIsFabOpen(false)
-                  setShowSettings(true)
-                }}
-              >
-                <Sliders className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium bg-background/90 backdrop-blur px-2 py-1 rounded-md shadow-sm border border-border/50">
-                New Project
-              </span>
-              <Button
-                size="icon"
-                className="h-10 w-10 rounded-full shadow-md [&_svg]:size-4"
-                onClick={() => {
-                  setIsFabOpen(false)
-                  onNewProject()
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Main Trigger Button */}
-          <Button
-            size="icon"
-            className={cn(
-              'pointer-events-auto h-14 w-14 rounded-full shadow-lg transition-transform duration-300 [&_svg]:size-6',
-              isFabOpen ? 'rotate-90' : 'rotate-0'
-            )}
-            onClick={toggleFab}
-          >
-            <Settings className="h-6 w-6" />
-          </Button>
-        </div>
-      )}
-
-      {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
     </div>
   )
 }

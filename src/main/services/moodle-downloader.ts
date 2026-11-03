@@ -37,7 +37,7 @@ export class MoodleDownloader {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+          'User-Agent': 'MoodleDocks/1.0 (+https://github.com/yourrepo)',
           Range: 'bytes=0-0' // Request only first byte
         },
         signal
@@ -319,7 +319,7 @@ export class MoodleDownloader {
             const headResponse = await fetch(url, {
               method: 'HEAD',
               headers: {
-                'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+                'User-Agent': 'MoodleDocks/1.0 (+https://github.com/yourrepo)',
                 'Accept-Encoding': 'identity' // Explicitly request no compression
               },
               signal: controller.signal
@@ -367,7 +367,7 @@ export class MoodleDownloader {
         const response = await this.retryWithBackoff(async () => {
           // Build headers with compression and resume support
           const headers: Record<string, string> = {
-            'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+            'User-Agent': 'MoodleDocks/1.0 (+https://github.com/yourrepo)',
             'Accept-Encoding': 'gzip, deflate, br'
           }
 
@@ -403,7 +403,7 @@ export class MoodleDownloader {
           const retryResponse = await this.retryWithBackoff(async () => {
             const retryFetchResponse = await fetch(url, {
               headers: {
-                'User-Agent': 'MoodleBox/1.0 (+https://github.com/yourrepo)',
+                'User-Agent': 'MoodleDocks/1.0 (+https://github.com/yourrepo)',
                 'Accept-Encoding': 'gzip, deflate, br'
               },
               signal: controller.signal
