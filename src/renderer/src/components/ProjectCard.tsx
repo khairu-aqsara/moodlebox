@@ -44,6 +44,19 @@ const STATUS_CONFIG: Record<Project['status'], { tone: StatusTone; text: string 
   error: { tone: 'fault', text: 'Error' }
 }
 
+// Short labels for the start steps that lifecycle-manager reports in progress.phase.
+// Stopping and deleting send no phase, so the row falls back to the status text.
+const STEP_LABEL: Record<string, string> = {
+  resolve: 'Checking version',
+  download: 'Downloading Moodle',
+  pull: 'Pulling images',
+  containers: 'Starting containers',
+  database: 'Waiting for database',
+  install: 'Installing Moodle',
+  course: 'Restoring course',
+  webserver: 'Starting web server'
+}
+
 const CHIP_TONE: Record<StatusTone, string> = {
   live: 'bg-green-soft text-green',
   idle: 'bg-paper-3 text-ink-2',
@@ -139,7 +152,12 @@ const ProjectCardComponent = ({ project }: ProjectCardProps): React.JSX.Element 
 
               <dl className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <dt className="text-muted-foreground">Status</dt>
+                  {/* While busy, the label names the step; the chip states keep "Status" */}
+                  <dt className={isBusy ? 'text-ink-2' : 'text-muted-foreground'}>
+                    {isBusy
+                      ? (STEP_LABEL[project.progress?.phase ?? ''] ?? statusConfig.text)
+                      : 'Status'}
+                  </dt>
                   {/* min-h-7 keeps the row height when the chip changes to the progress bar */}
                   <dd className="flex min-h-7 items-center gap-1">
                     {isBusy ? (
